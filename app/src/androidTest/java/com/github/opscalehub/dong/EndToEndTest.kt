@@ -8,14 +8,13 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextClearance
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.semantics.getOrNull
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.github.opscalehub.dong.data.SampleData
 import com.github.opscalehub.dong.data.db.PeriodStatus
 import com.github.opscalehub.dong.domain.ledger.EntryType
 import kotlinx.coroutines.runBlocking
@@ -27,10 +26,11 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * Drives the real Compose UI through a complete month: building → units →
- * period → expense → finalize → payment → reversal → activity recreation.
- * Assertions read both the screen and the ledger. Wipes the app's data first,
- * so run it on an emulator or a device without real data.
+ * Drives the real Compose UI through a complete month with the task-first
+ * interface: welcome → setup wizard → expense (preset) → close the month from
+ * the home checklist → payment from the unit page (typed in Toman) → reversal →
+ * reports → activity recreation. Assertions read the screen and the ledger
+ * (exact Rial). Wipes the app's data first: run it on an emulator only.
  */
 @RunWith(AndroidJUnit4::class)
 class EndToEndTest {
@@ -49,138 +49,153 @@ class EndToEndTest {
 
     private fun field(label: String): SemanticsNodeInteraction = rule.onNode(hasSetTextAction() and hasText(label, substring = true))
 
+    /** On failure, log every visible text (one per line; whole-tree dumps get truncated by logcat). */
+    private fun dumpScreen(tag: String) {
+        rule.onAllNodes(androidx.compose.ui.test.isRoot()).fetchSemanticsNodes().forEach { root ->
+            fun walk(n: androidx.compose.ui.semantics.SemanticsNode, depth: Int) {
+                val t = n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.joinToString()
+                val d = n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)?.joinToString()
+                if (t != null || d != null) android.util.Log.e("E2E", "$tag ${"  ".repeat(depth)}text=$t desc=$d")
+                n.children.forEach { walk(it, depth + 1) }
+            }
+            walk(root, 0)
+        }
+    }
+
     private fun type(label: String, value: String) {
+        val ok = runCatching { rule.waitUntil(5_000) { rule.onAllNodes(hasSetTextAction() and hasText(label, substring = true)).fetchSemanticsNodes().isNotEmpty() } }
+        if (ok.isFailure) dumpScreen("type($label)")
         field(label).performTextClearance()
         field(label).performTextInput(value)
     }
 
-    /** The last clickable node with this exact text (dialog buttons share text with titles/screens). */
+    /** The last clickable node with this text or content description (dialog buttons share text with titles). */
     private fun clickLast(text: String) {
-        val nodes = rule.onAllNodes(hasText(text) and hasClickAction())
+        val nodes = rule.onAllNodes((hasText(text) or hasContentDescription(text)) and hasClickAction())
         runCatching { rule.waitUntil(5_000) { nodes.fetchSemanticsNodes().isNotEmpty() } }
         val count = nodes.fetchSemanticsNodes().size
         if (count == 0) {
-            // Some Material components (e.g. the extended FAB) keep their label in the unmerged tree;
-            // a touch on the label lands on the component.
+            // Some components keep their label in the unmerged tree; a touch on the label lands on them.
             val labels = rule.onAllNodes(hasText(text), useUnmergedTree = true)
             check(labels.fetchSemanticsNodes().isNotEmpty()) { "no node: $text" }
             labels[labels.fetchSemanticsNodes().size - 1].performClick()
-            rule.waitForIdle()
-            return
+        } else {
+            nodes[count - 1].performClick()
         }
-        nodes[count - 1].performClick()
         rule.waitForIdle()
     }
 
-    private fun assertNoUnexpectedError() {
-        assertTrue("unexpected-error snackbar shown", rule.onAllNodesWithText("خطای غیرمنتظره", substring = true).fetchSemanticsNodes().isEmpty())
-    }
-
-    private fun navigate(item: String) {
-        assertNoUnexpectedError()
-        // From a sub-screen, go back (like a user) until the drawer button is available.
+    /**
+     * Click that should open a new screen. The test harness occasionally loses a click injected
+     * while a navigation transition settles (real touches were verified on device at 0.1 s), so retry.
+     */
+    private fun clickExpect(text: String, expected: String) {
         repeat(3) {
-            if (rule.onAllNodes(hasContentDescription("منو")).fetchSemanticsNodes().isEmpty() &&
-                rule.onAllNodes(hasContentDescription("بازگشت")).fetchSemanticsNodes().isNotEmpty()) {
-                rule.onNode(hasContentDescription("بازگشت")).performClick()
-                rule.waitForIdle()
-            }
+            clickLast(text)
+            val shown = runCatching { rule.waitUntil(3_000) { rule.onAllNodesWithText(expected, substring = true).fetchSemanticsNodes().isNotEmpty() } }
+            if (shown.isSuccess) return
         }
-        rule.waitUntil(5_000) { rule.onAllNodes(hasContentDescription("منو")).fetchSemanticsNodes().isNotEmpty() }
-        rule.onNode(hasContentDescription("منو")).performClick()
-        rule.waitForIdle()
-        clickLast(item)
+        dumpScreen("clickExpect($text)")
+        error("$text did not open $expected")
     }
 
     private fun scrollTo(text: String) {
         rule.onAllNodes(hasScrollAction())[0].performScrollToNode(hasText(text))
     }
 
+    private fun assertNoUnexpectedError() =
+        assertTrue("unexpected-error snackbar shown", rule.onAllNodesWithText("خطای غیرمنتظره", substring = true).fetchSemanticsNodes().isEmpty())
+
+    /** Back to a top-level screen (like a user), then the bottom-bar tab. */
+    private fun tab(label: String) {
+        assertNoUnexpectedError()
+        repeat(3) {
+            if (rule.onAllNodes(hasContentDescription("بازگشت")).fetchSemanticsNodes().isNotEmpty()) {
+                rule.onNode(hasContentDescription("بازگشت")).performClick()
+                rule.waitForIdle()
+            }
+        }
+        clickLast(label)
+    }
+
     @Test
     fun fullMonthThroughTheUi() {
-        // 1. onboarding → building
-        waitFor("به «دنگ» خوش آمدید")
-        clickLast("ساختمان جدید")
+        // 1. welcome → setup wizard: one floor × two units (generator defaults: 100 m², 2 people)
+        waitFor("راه‌اندازی ساختمان")
+        clickLast("راه‌اندازی ساختمان")
         type("نام ساختمان", "ساختمان آزمون")
-        clickLast("ذخیره")
-        waitFor("دوره جاری")
+        clickLast("بعدی")
+        type("تعداد طبقات", "1")
+        type("واحد در هر طبقه", "2")
+        clickLast("ساخت خودکار")
+        clickLast("بعدی")
+        clickLast("پایان")
+        waitFor("این ماه")
         val building = runBlocking { container.db.buildingDao().buildings().single() }
+        assertEquals(10L, building.displayDivisor)
+        val units = runBlocking { container.db.buildingDao().units(building.id).associateBy { it.label } }
+        assertEquals(setOf("۱-۱", "۱-۲"), units.keys)
+        assertEquals(1, runBlocking { container.db.periodDao().periods(building.id).size })
 
-        // 2. two units with occupants
-        navigate("واحدها و ساکنان")
-        for ((label, occ) in listOf("101" to "2", "102" to "3")) {
-            clickLast("واحد جدید")
-            type("شماره/نام واحد", label)
-            type("متراژ (متر مربع)", "80")
-            type("تعداد ساکنان", occ)
-            clickLast("ذخیره")
-            waitFor("واحد $label")
-        }
-        rule.waitUntil(5_000) { runBlocking { container.db.buildingDao().units(building.id).size == 2 } }
-
-        // 3. period for the current month
-        navigate("دوره‌های صورتحساب")
-        clickLast("دوره جدید")
-        clickLast("ذخیره")
-        val month = SampleData.month(container.repos.clock.today())
-        waitFor(month.name)
-
-        // 4. expense: cleaning (category default: per occupant, 2 + 3 people), assigned to the draft period
-        navigate("هزینه‌ها")
-        clickLast("هزینه جدید")
-        type("شرح", "هزینه آزمون")
-        rule.onNode(hasText("دسته") and hasClickAction(), useUnmergedTree = false).performClick()
+        // 2. expense: cleaning (per occupant), 100,000 Toman = 1,000,000 Rial
+        tab("هزینه‌ها")
+        clickExpect("هزینه جدید", "شرح")
+        type("شرح", "نظافت آزمون")
+        rule.onNode(hasText("دسته") and hasClickAction()).performClick()
         rule.waitForIdle()
         clickLast("نظافت")
-        type("مبلغ", "1000000")
+        type("مبلغ", "100000")
+        // The live preview is below the fold; scroll to it and check it lists both units.
+        scrollTo("چه کسی چقدر می‌پردازد")
+        rule.waitUntil(5_000) { rule.onAllNodesWithText("۵۰٬۰۰۰", substring = true).fetchSemanticsNodes().size >= 2 }
         scrollTo("ذخیره")
         clickLast("ذخیره")
         rule.waitUntil(5_000) { runBlocking { container.db.expenseDao().expenses(building.id).isNotEmpty() } }
+        assertEquals(1_000_000L, runBlocking { container.db.expenseDao().expenses(building.id).single().amountMinor })
 
-        // 5. preview and finalize
-        navigate("دوره‌های صورتحساب")
-        clickLast(month.name)
-        waitFor("جمع شارژ")
-        clickLast("قطعی کردن دوره")
-        clickLast("قطعی کردن دوره") // confirm in dialog
+        // 3. close the month from the home checklist
+        tab("خانه")
+        clickExpect("بررسی و بستن ماه", "جمع شارژ")
+        clickLast("بستن ماه و صدور شارژ")
+        clickLast("بستن ماه و صدور شارژ") // confirm in dialog
         rule.waitUntil(10_000) { runBlocking { container.db.periodDao().periods(building.id).single().status == PeriodStatus.FINALIZED } }
-        val units = runBlocking { container.db.buildingDao().units(building.id).associateBy { it.label } }
         runBlocking {
             val bal = container.repos.finance.balances(building.id)
-            assertEquals(400_000L, bal.units.getValue(units.getValue("101").id))
-            assertEquals(600_000L, bal.units.getValue(units.getValue("102").id))
+            assertEquals(500_000L, bal.units.getValue(units.getValue("۱-۱").id))
+            assertEquals(500_000L, bal.units.getValue(units.getValue("۱-۲").id))
             assertTrue(bal.reconciles)
         }
 
-        // 6. payment from unit 101
-        navigate("دریافت‌ها و مانده‌ها")
-        clickLast("ثبت دریافت از واحد")
-        rule.onNode(hasText("واحد") and hasClickAction()).performClick()
-        rule.waitForIdle()
-        clickLast("101")
-        type("مبلغ", "400000")
+        // 4. payment from the unit page: 50,000 Toman
+        tab("واحدها")
+        clickExpect("واحد ۱-۱", "ارسال قبض")
+        clickExpect("ثبت دریافت", "ثبت دریافت از واحد")
+        type("مبلغ", "50000")
         clickLast("ذخیره")
-        rule.waitUntil(5_000) { runBlocking { container.repos.finance.balances(building.id).units.getValue(units.getValue("101").id) == 0L } }
-        waitFor("تسویه")
+        rule.waitUntil(5_000) { runBlocking { container.repos.finance.balances(building.id).units.getValue(units.getValue("۱-۱").id) == 0L } }
 
-        // 7. reverse the payment with a reason → debt is back, original entry kept
-        clickLast("برگشت سند")
+        // 5. reverse it from «بیشتر» → all transactions
+        tab("بیشتر")
+        clickExpect("همه تراکنش‌ها", "برگشت تراکنش")
+        clickExpect("برگشت تراکنش", "دلیل (الزامی")
         type("دلیل", "آزمون برگشت")
         clickLast("تأیید")
-        rule.waitUntil(5_000) { runBlocking { container.repos.finance.balances(building.id).units.getValue(units.getValue("101").id) == 400_000L } }
+        rule.waitUntil(5_000) { runBlocking { container.repos.finance.balances(building.id).units.getValue(units.getValue("۱-۱").id) == 500_000L } }
         runBlocking {
             val entries = container.db.financeDao().entries(building.id)
             assertTrue(entries.any { it.type == EntryType.RESIDENT_PAYMENT })
             assertTrue(entries.any { it.type == EntryType.REVERSAL })
         }
 
-        // 8. activity recreation keeps everything
+        // 6. reports render for the closed month; recreation keeps everything
+        tab("گزارش")
+        waitFor("وصول شارژ")
         rule.activityRule.scenario.recreate()
-        waitFor("ساختمان آزمون")
+        waitFor("این ماه")
+        assertNoUnexpectedError()
         runBlocking {
             val bal = container.repos.finance.balances(building.id)
             assertEquals(1_000_000L, bal.outstandingDebts)
-            assertEquals(0L, bal.cashTotal)
             assertTrue(bal.reconciles)
         }
     }

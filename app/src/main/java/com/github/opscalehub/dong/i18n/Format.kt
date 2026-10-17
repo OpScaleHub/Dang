@@ -10,6 +10,17 @@ import java.time.Instant
 object Fmt {
     private const val FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
 
+    /**
+     * In right-to-left text a leading minus is a neutral and drifts to the right edge
+     * («۳٬۲۶۰-»). Negative numbers are wrapped in a left-to-right isolate (LRI…PDI) so the
+     * minus stays attached on the left, as Persian banking apps show it.
+     */
+    private fun isolateNegative(s: String): String = if (s.startsWith("−")) "\u2066$s\u2069" else s
+
+    /** A formatted amount with an explicit sign («+۱۰۰٬۰۰۰» / «−۳۰۰٬۰۰۰»), kept left-attached in RTL. */
+    fun signed(positive: Boolean, formattedMagnitude: String): String =
+        "\u2066" + (if (positive) "+" else "−") + formattedMagnitude.removePrefix("\u2066").removeSuffix("\u2069") + "\u2069"
+
     fun digits(s: String): String = buildString(s.length) {
         for (c in s) append(if (c in '0'..'9') FA_DIGITS[c - '0'] else c)
     }
@@ -20,7 +31,7 @@ object Fmt {
             in '۰'..'۹' -> append('0' + (c - '۰'))
             in '٠'..'٩' -> append('0' + (c - '٠'))
             '٫' -> append('.')
-            '٬', ',', '،' -> Unit
+            '٬', ',', '،', '\u2066', '\u2067', '\u2068', '\u2069' -> Unit
             else -> append(c)
         }
     }
@@ -42,10 +53,64 @@ object Fmt {
             val a = if (neg) -minor else minor
             (if (neg) "−" else "") + grouped(a / p).removePrefix("−") + "٫" + (a % p).toString().padStart(minorDigits, '0')
         }
-        return if (persian) digits(text) else text.replace('٬', ',').replace('٫', '.').replace('−', '-')
+        return if (persian) isolateNegative(digits(text)) else text.replace('٬', ',').replace('٫', '.').replace('−', '-')
     }
 
-    fun number(value: Long): String = digits(grouped(value))
+    fun number(value: Long): String = isolateNegative(digits(grouped(value)))
+
+    private fun pow10(n: Int): Long {
+        var p = 1L
+        repeat(n) { p *= 10 }
+        return p
+    }
+
+    private fun log10(divisor: Long): Int {
+        var d = divisor
+        var n = 0
+        while (d > 1) {
+            require(d % 10 == 0L) { "display divisor must be a power of 10" }
+            d /= 10
+            n++
+        }
+        return n
+    }
+
+    /**
+     * Stored minor units → display unit. [divisor] = minor units per display unit
+     * beyond the currency's own minor digits (Rial → Toman: 10). Fraction digits
+     * caused by the divisor are shown only when non-zero («۱٫۵»), so typical
+     * amounts read as whole Tomans.
+     */
+    fun moneyIn(minor: Long, minorDigits: Int, divisor: Long, persian: Boolean = true): String {
+        val extra = log10(divisor)
+        val scale = pow10(minorDigits + extra)
+        val neg = minor < 0
+        val a = if (neg) -minor else minor
+        var frac = (a % scale).toString().padStart(minorDigits + extra, '0')
+        if (frac.isNotEmpty()) {
+            val trimmed = frac.trimEnd('0')
+            frac = if (trimmed.length < minorDigits) frac.take(minorDigits) else trimmed
+        }
+        val s = (if (neg) "−" else "") + grouped(a / scale) + if (frac.isEmpty()) "" else "٫$frac"
+        return if (persian) isolateNegative(digits(s)) else s.replace('٬', ',').replace('٫', '.').replace('−', '-')
+    }
+
+    /** Display-unit text → stored minor units; null if invalid or more precise than storable. */
+    fun parseMoneyIn(text: String, minorDigits: Int, divisor: Long): Long? {
+        val t = latin(text).trim().replace("−", "-")
+        if (t.isEmpty() || t == "-") return null
+        val neg = t.startsWith("-")
+        val body = t.removePrefix("-")
+        val parts = body.split('.')
+        if (parts.size > 2 || parts.any { p -> p.any { !it.isDigit() } }) return null
+        val decimals = minorDigits + log10(divisor)
+        val fracText = if (parts.size == 2) parts[1] else ""
+        if (fracText.length > decimals) return null
+        val whole = parts[0].ifEmpty { "0" }.toLongOrNull() ?: return null
+        val frac = fracText.padEnd(decimals, '0').ifEmpty { "0" }.toLong()
+        val v = whole * pow10(decimals) + frac
+        return if (neg) -v else v
+    }
 
     /** Litres → m³ with 3 decimals ("۱۲٫۵۰۰"). */
     fun cubicMeters(liters: Long, persian: Boolean = true): String {
@@ -55,7 +120,7 @@ object Fmt {
         // looks like the thousands separator ٬, so three decimals would read as thousands.
         val frac = (a % 1000).toString().padStart(3, '0').trimEnd('0')
         val s = (if (neg) "−" else "") + grouped(a / 1000) + if (frac.isEmpty()) "" else "٫$frac"
-        return if (persian) digits(s) else s.replace('٬', ',').replace('٫', '.').replace('−', '-')
+        return if (persian) isolateNegative(digits(s)) else s.replace('٬', ',').replace('٫', '.').replace('−', '-')
     }
 
     /** "12.5" / "۱۲٫۵" m³ → litres; null if invalid. */

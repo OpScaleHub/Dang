@@ -71,6 +71,19 @@ data class PeriodSnapshot(
 
 object PeriodCalculator {
 
+    /** The allocation context of a period — shared by finalization and the expense-form preview. */
+    fun context(input: PeriodInput, water: WaterReport = WaterCalculator.report(input.meters, input.readings, input.units.filter { it.active }.map { it.id }, input.startDate, input.endDate)) =
+        AllocationContext(
+            units = input.units,
+            occupancyQuantity = AllocationContext.occupancy(input.occupancy, input.units, input.startDate, input.endDate, input.settings.occupancyBasis),
+            occupancyKind = if (input.settings.occupancyBasis == OccupancyBasis.DAY_WEIGHTED) QuantityKind.OCCUPANT_DAYS else QuantityKind.OCCUPANTS,
+            periodDays = input.days,
+            water = if (input.meters.isNotEmpty()) water else null,
+            spaces = input.spaces,
+            effectiveAssignments = AllocationContext.effectiveAssignments(input.assignments, input.endDate),
+            increment = input.settings.roundingIncrement,
+        )
+
     fun calculate(input: PeriodInput): PeriodResult {
         val issues = mutableListOf<Issue>()
         if (input.endDate < input.startDate) {
@@ -78,18 +91,8 @@ object PeriodCalculator {
             return PeriodResult(emptyList(), emptyList(), WaterReport(emptyList(), null, emptyMap(), emptyList(), emptyList()), issues)
         }
         val water = WaterCalculator.report(input.meters, input.readings, input.units.filter { it.active }.map { it.id }, input.startDate, input.endDate)
-        val hasMeters = input.meters.isNotEmpty()
-        if (hasMeters) issues += water.issues
-        val ctx = AllocationContext(
-            units = input.units,
-            occupancyQuantity = AllocationContext.occupancy(input.occupancy, input.units, input.startDate, input.endDate, input.settings.occupancyBasis),
-            occupancyKind = if (input.settings.occupancyBasis == OccupancyBasis.DAY_WEIGHTED) QuantityKind.OCCUPANT_DAYS else QuantityKind.OCCUPANTS,
-            periodDays = input.days,
-            water = if (hasMeters) water else null,
-            spaces = input.spaces,
-            effectiveAssignments = AllocationContext.effectiveAssignments(input.assignments, input.endDate),
-            increment = input.settings.roundingIncrement,
-        )
+        if (input.meters.isNotEmpty()) issues += water.issues
+        val ctx = context(input, water)
         val sources = mutableListOf<SourceResult>()
         for (e in input.expenses) {
             val r = AllocationEngine.allocate(e.id, e.amountMinor, e.policy, ctx)

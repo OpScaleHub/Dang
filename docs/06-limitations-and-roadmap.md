@@ -13,8 +13,8 @@
 4. **Payments are balance-forward.** A payment reduces the unit's balance; it
    is not matched to individual charges.
 5. **Attachments are text references only** (`documentRef`), not photos.
-6. **Date entry is typed** (`۱۴۰۵/۰۷/۲۵`, Persian or Latin digits, with a
-   "today" button); there is no Jalali date-picker widget yet.
+6. **Dates** use a built-in Jalali month picker (typing still works); there
+   is no year jump control yet.
 7. **Persian-only UI** (product decision). The domain is locale-free; adding a
    language is mechanical (see docs/04).
 8. **Water tariff tiers apply per unit and per period** as entered; tiered
@@ -26,8 +26,10 @@
     adjustment, not by editing the original.
 11. **Release signing** is not configured; `assembleRelease` produces an
     unsigned APK. Debug APKs are installable for evaluation.
-12. **Accessibility** was checked for labels (all actions have accessible
-    names) but not with a full TalkBack walkthrough.
+12. **Accessibility** was checked for labels (all actions and charts have
+    accessible names/summaries) but not with a full TalkBack walkthrough.
+13. **Existing buildings keep their display unit after the v3 upgrade**
+    (Rial); switch to Toman under Settings. New buildings default to Toman.
 
 ## Unresolved business decisions (the administrator decides; the app offers options)
 
@@ -39,11 +41,10 @@ target, late fees.
 
 | Priority | Item | Notes |
 |---|---|---|
-| P1 | Jalali date picker | Faster, error-free date entry |
-| P1 | Per-unit statement sharing (HTML/PDF per unit via share sheet) | Today: one HTML for all units |
+| P1 | Share bills to all debtors in one go | Today: one unit at a time |
 | P1 | Signed release build + F-Droid / Play listing | Needs a keystore decision |
-| P2 | Receipt photos (content URI + migration v3) | Backup must then include files (zip) |
-| P2 | Payment allocation to specific charges / aging report | For buildings that need it |
+| P2 | Receipt photos (content URI + migration v4) | Backup must then include files (zip) |
+| P2 | Payment allocation to specific charges (instead of oldest-first) | Aging and collection reports already use oldest-first settlement |
 | P2 | Reminders for due dates and missing readings | WorkManager, local only |
 | P3 | Google Sheets export | Optional, user-initiated |
 | P3 | Optional sync / shared access with roles | Requires a backend; append-only journal and UUIDs already fit |

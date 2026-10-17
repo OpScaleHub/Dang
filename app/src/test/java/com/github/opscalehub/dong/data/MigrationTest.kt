@@ -46,4 +46,20 @@ class MigrationTest {
         helper.createDatabase("fresh.db", 1).close()
         helper.runMigrationsAndValidate("fresh.db", DongDatabase.VERSION, true, *Migrations.ALL).close()
     }
+
+    @Test
+    fun `migrate 2 to 3 adds display currency and keeps buildings`() {
+        helper.createDatabase("m23.db", 2).apply {
+            execSQL("INSERT INTO buildings (id, name, address, currencyCode, currencyName, minorDigits, roundingIncrement, occupancyBasis, calendar, notes, createdAt) VALUES ('b1','ساختمان','', 'IRR','ریال',0,1000,'DAY_WEIGHTED','JALALI','',1)")
+            close()
+        }
+        val db = helper.runMigrationsAndValidate("m23.db", 3, true, *Migrations.ALL)
+        db.query("SELECT displayCurrencyName, displayDivisor, roundingIncrement FROM buildings WHERE id = 'b1'").use { c ->
+            c.moveToFirst()
+            assertEquals("", c.getString(0))
+            assertEquals(1L, c.getLong(1))
+            assertEquals(1000L, c.getLong(2))
+        }
+        db.close()
+    }
 }

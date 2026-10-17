@@ -37,7 +37,9 @@ import com.github.opscalehub.dong.ui.KeyValue
 import com.github.opscalehub.dong.ui.NumberInput
 import com.github.opscalehub.dong.ui.ReasonDialog
 import com.github.opscalehub.dong.ui.Routes
+import com.github.opscalehub.dong.ui.LocalMoney
 import com.github.opscalehub.dong.ui.S
+import com.github.opscalehub.dong.ui.money
 import com.github.opscalehub.dong.ui.ScreenList
 import com.github.opscalehub.dong.ui.SectionCard
 import com.github.opscalehub.dong.ui.SingleChoice
@@ -91,11 +93,12 @@ fun WaterScreen(vm: AppViewModel, nav: NavController) {
             item {
                 SectionCard(S.tariffs) {
                     if (tariffs.isEmpty()) Hint(S.empty)
+                    val mf = LocalMoney.current
                     tariffs.forEach { t ->
                         Text("${t.name} — ${S.effectiveFrom} ${Fmt.date(t.effectiveFrom, building.calendar)}", style = MaterialTheme.typography.bodyMedium)
                         Hint(decodeTiers(t.tiersJson).joinToString(" ، ") { tier ->
-                            (tier.upToLiters?.let { "تا ${Fmt.cubicMeters(it)}" } ?: "بیشتر") + " م³: " + Fmt.money(tier.priceMinorPerM3, building.minorDigits)
-                        } + "، ${S.fixedFee}: ${Fmt.money(t.fixedFeeMinor, building.minorDigits)}، ${S.surcharge}: ${Fmt.percentBp(t.surchargeBp)}")
+                            (tier.upToLiters?.let { "تا ${Fmt.cubicMeters(it)}" } ?: "بیشتر") + " م³: " + mf.format(tier.priceMinorPerM3)
+                        } + "، ${S.fixedFee}: ${money(t.fixedFeeMinor)}، ${S.surcharge}: ${Fmt.percentBp(t.surchargeBp)}")
                     }
                     OutlinedButton(onClick = { addingTariff = true }) { Text(S.newTariff) }
                 }

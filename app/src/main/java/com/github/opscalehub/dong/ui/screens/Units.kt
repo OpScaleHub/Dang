@@ -1,5 +1,32 @@
 package com.github.opscalehub.dong.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import com.github.opscalehub.dong.data.Insights
+import com.github.opscalehub.dong.data.db.PeriodStatus
+import com.github.opscalehub.dong.share.Bill
+import com.github.opscalehub.dong.share.BillShare
+import com.github.opscalehub.dong.ui.EmptyState
+import com.github.opscalehub.dong.ui.LocalMoney
+import com.github.opscalehub.dong.ui.SectionTitle
+import com.github.opscalehub.dong.ui.UnitChip
+import com.github.opscalehub.dong.ui.charts.AgingBar
+import com.github.opscalehub.dong.ui.charts.Segment
+import com.github.opscalehub.dong.ui.charts.Sparkline
+import com.github.opscalehub.dong.ui.charts.StackedBar
+import com.github.opscalehub.dong.ui.theme.LocalViz
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +67,7 @@ import com.github.opscalehub.dong.ui.KeyValue
 import com.github.opscalehub.dong.ui.NumberInput
 import com.github.opscalehub.dong.ui.Routes
 import com.github.opscalehub.dong.ui.S
+import com.github.opscalehub.dong.ui.money
 import com.github.opscalehub.dong.ui.ScreenList
 import com.github.opscalehub.dong.ui.SectionCard
 import com.github.opscalehub.dong.ui.SingleChoice
@@ -53,33 +81,78 @@ import com.github.opscalehub.dong.ui.rememberDate
 fun currentOccupants(records: List<OccupancyEntity>, today: Long): Map<String, Int> =
     records.groupBy { it.unitId }.mapValues { (_, l) -> l.filter { it.effectiveFrom <= today }.maxByOrNull { it.effectiveFrom }?.occupantCount ?: 0 }
 
+private enum class UnitFilter { ALL, OWES, SETTLED }
+
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun UnitsScreen(vm: AppViewModel, nav: NavController) {
     val b by vm.building.collectAsState()
     val building = b ?: return
     val units by vm.units.collectAsState()
     val occ by vm.occupancy.collectAsState()
-    val balances by derived(vm, building.id) { vm.repos.finance.balances(building.id) }
+    val report by derived(vm, building.id) { vm.reports.load(building.id) }
     var adding by remember { mutableStateOf(false) }
+    var filter by remember { mutableStateOf(UnitFilter.ALL) }
     val current = currentOccupants(occ, vm.today)
+    val balances = report?.balances?.units.orEmpty()
+    val viz = LocalViz.current
 
     WithFab(S.newUnit, { adding = true }) {
         ScreenList {
             item {
-                SectionCard {
-                    KeyValue(S.total, "${Fmt.number(units.size.toLong())} ${S.unit}، ${Fa.quantity(QuantityKind.AREA_CENTI_M2, units.filter { it.active }.sumOf { it.areaCentiM2 })}، ${Fmt.number(current.filterKeys { k -> units.any { it.id == k && it.active } }.values.sum().toLong())} نفر")
-                    Hint(S.signConvention)
+                val d = report ?: return@item
+                val aging = Insights.aging(d, vm.today)
+                SectionCard(S.debtAging, subtitle = S.signConvention) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(money(d.balances.outstandingDebts), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+                            color = if (d.balances.outstandingDebts > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface)
+                        Spacer(Modifier.width(8.dp))
+                        Hint("${LocalMoney.current.unitName}، ${Fmt.number(balances.values.count { it > 0 }.toLong())} ${S.debtorUnits}")
+                    }
+                    val top = aging.filter { it.total > 0 }.take(5)
+                    val max = top.maxOfOrNull { it.total } ?: 1
+                    top.forEach { a ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(units.firstOrNull { it.id == a.unitId }?.label ?: "", Modifier.width(44.dp), style = MaterialTheme.typography.labelMedium)
+                            AgingBar(Insights.AgeBucket.entries.map { a.buckets.getValue(it) }, max, Modifier.weight(1f))
+                            Spacer(Modifier.width(8.dp))
+                            Text(money(a.total), style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    if (top.isNotEmpty()) {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            listOf(S.ageCurrent, S.age2, S.age3, S.age4).forEachIndexed { i, l ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(10.dp).clip(CircleShape).background(viz.aging[i]))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(l, style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
                 }
             }
-            items(units.size) { i ->
-                val u = units[i]
+            item {
+                SingleChoice(UnitFilter.entries, filter, { filter = it }) {
+                    when (it) { UnitFilter.ALL -> S.allUnits; UnitFilter.OWES -> S.owes; UnitFilter.SETTLED -> S.settledOrCredit }
+                }
+            }
+            val shown = units.filter { u ->
+                val bal = balances[u.id] ?: 0
+                when (filter) { UnitFilter.ALL -> true; UnitFilter.OWES -> bal > 0; UnitFilter.SETTLED -> bal <= 0 }
+            }
+            if (units.isEmpty()) item { EmptyState(S.empty, S.unitsHint, S.newUnit) { adding = true } }
+            items(shown.size) { i ->
+                val u = shown[i]
                 SectionCard {
                     ClickRow({ nav.navigate(Routes.unit(u.id)) }) {
+                        UnitChip(u.label, if (u.active) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh)
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text("${S.unit} ${u.label}" + if (!u.active) " (${S.inactive})" else "", style = MaterialTheme.typography.titleMedium)
-                            Hint("${S.floor} ${Fmt.number(u.floor.toLong())}، ${Fa.quantity(QuantityKind.AREA_CENTI_M2, u.areaCentiM2)}، ${Fmt.number((current[u.id] ?: 0).toLong())} نفر")
+                            Hint("${S.floor} ${Fmt.number(u.floor.toLong())}، ${Fa.quantity(QuantityKind.AREA_CENTI_M2, u.areaCentiM2)}، ${Fmt.number((current[u.id] ?: 0).toLong())} ${S.people}")
                         }
-                        balances?.units?.get(u.id)?.let { BalanceText(it, building.minorDigits) }
+                        BalanceText(balances[u.id] ?: 0)
                     }
                 }
             }
@@ -114,6 +187,7 @@ private fun UnitDialog(vm: AppViewModel, unit: UnitEntity?, buildingId: String, 
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun UnitScreen(vm: AppViewModel, nav: NavController, unitId: String) {
     val b by vm.building.collectAsState()
@@ -122,64 +196,123 @@ fun UnitScreen(vm: AppViewModel, nav: NavController, unitId: String) {
     val occ by vm.occupancy.collectAsState()
     val spaces by vm.spaces.collectAsState()
     val assignments by vm.assignments.collectAsState()
+    val periods by vm.periods.collectAsState()
     val unit = units.firstOrNull { it.id == unitId } ?: return
+    val report by derived(vm, unitId) { vm.reports.load(building.id) }
     val statement by derived(vm, unitId) { vm.repos.finance.unitStatement(building.id, unitId) }
+    val lastClosed = periods.filter { it.status == PeriodStatus.FINALIZED }.maxByOrNull { it.endDate }
+    val sinceClosed by derived(vm, unitId, lastClosed?.id) { lastClosed?.let { vm.repos.finance.unitStatement(building.id, unitId, it.startDate, null) } }
     var editing by remember { mutableStateOf(false) }
     var addingOcc by remember { mutableStateOf(false) }
+    var paying by remember { mutableStateOf(false) }
+    var showDetails by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val mf = LocalMoney.current
+    val viz = LocalViz.current
+    val balance = statement?.closing ?: 0
+
+    fun reminder() = S.reminderText.format(unit.label, building.name, mf.withUnit(balance.coerceAtLeast(0)))
 
     ScreenList {
         item {
-            SectionCard("${S.unit} ${unit.label}") {
-                KeyValue(S.floor, Fmt.number(unit.floor.toLong()))
-                KeyValue(S.area, Fa.quantity(QuantityKind.AREA_CENTI_M2, unit.areaCentiM2))
-                KeyValue(S.status, if (unit.active) S.active else S.inactive)
-                if (unit.notes.isNotBlank()) Hint(unit.notes)
-                Row {
+            SectionCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    UnitChip(unit.label)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("${S.unit} ${unit.label}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Hint("${S.floor} ${Fmt.number(unit.floor.toLong())}، ${Fa.quantity(QuantityKind.AREA_CENTI_M2, unit.areaCentiM2)}، ${Fmt.number((currentOccupants(occ, vm.today)[unit.id] ?: 0).toLong())} ${S.people}")
+                    }
+                }
+                Text(
+                    when { balance > 0 -> S.owes; balance < 0 -> S.credit; else -> S.settled },
+                    style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(if (balance == 0L) "—" else mf.withUnit(kotlin.math.abs(balance)), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
+                    color = if (balance > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = { paying = true }) { Text(S.payNow) }
+                    OutlinedButton(onClick = {
+                        val d = report ?: return@OutlinedButton
+                        val lines = lastClosed?.let { p -> Insights.unitComposition(d, unitId, p.id).map { d.categoryName(it.first) to it.second } }.orEmpty()
+                        val bill = Bill(building.name, unit.label, lastClosed?.name, lines, sinceClosed?.opening ?: 0, sinceClosed?.payments ?: 0, balance, Fmt.date(vm.today, building.calendar))
+                        try {
+                            BillShare.shareBill(context, bill, mf, reminder())
+                        } catch (e: Exception) {
+                            vm.message(S.unexpectedError)
+                        }
+                    }) { Text(S.shareBill) }
+                    if (balance > 0) OutlinedButton(onClick = { BillShare.shareText(context, reminder()) }) { Text(S.shareReminder) }
                     TextButton(onClick = { editing = true }) { Text(S.edit) }
-                    TextButton(onClick = { nav.navigate(Routes.statement(unitId)) }) { Text(S.statement) }
                 }
             }
         }
         item {
-            SectionCard(S.balance) {
-                statement?.let { st ->
-                    KeyValue(S.opening, Fmt.money(st.opening, building.minorDigits))
-                    KeyValue("شارژ آب", Fmt.money(st.waterCharges, building.minorDigits))
-                    KeyValue("سایر شارژها", Fmt.money(st.otherCharges, building.minorDigits))
-                    KeyValue(S.paid, Fmt.money(st.payments, building.minorDigits))
-                    KeyValue("بستانکاری و تعدیل", Fmt.money(st.creditsAndAdjustments, building.minorDigits))
-                    KeyValue(S.refund, Fmt.money(st.refunds, building.minorDigits))
-                    Divider()
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(S.balance, Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                        BalanceText(st.closing, building.minorDigits)
+            val d = report ?: return@item
+            val p = lastClosed ?: return@item
+            val comp = Insights.unitComposition(d, unitId, p.id)
+            if (comp.isEmpty()) return@item
+            // Colour follows the category, never its rank: the building's top five categories (by
+            // all charges) own fixed slots in every unit's chart; everything else folds into «سایر».
+            val slots = d.lines.filter { it.account == com.github.opscalehub.dong.domain.ledger.AccountKind.INCOME && it.categoryId != null }
+                .groupBy { it.categoryId!! }.mapValues { (_, l) -> -l.sumOf { x -> x.amountMinor } }
+                .entries.sortedByDescending { it.value }.take(5).map { it.key }
+                .sortedBy { c -> d.categories.indexOfFirst { it.id == c } }
+            val known = comp.filter { it.first in slots }.sortedBy { slots.indexOf(it.first) }
+            val rest = comp.filter { it.first !in slots }.sumOf { it.second }
+            val segs = known.map { (c, v) -> Segment(d.categoryName(c), v, viz.categorical[slots.indexOf(c)], mf.format(v)) } +
+                if (rest > 0) listOf(Segment(S.flowOther, rest, viz.categorical[5], mf.format(rest))) else emptyList()
+            SectionCard("${S.whereMoneyWent} — ${p.name}") {
+                Text(mf.withUnit(comp.sumOf { it.second }), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                StackedBar(segs)
+            }
+        }
+        item {
+            val d = report ?: return@item
+            val hist = Insights.unitBalanceHistory(d, unitId)
+            if (hist.size < 2) return@item
+            SectionCard(S.balanceTrend, subtitle = hist.joinToString("  ") { "${it.first}: ${mf.format(it.second)}" }.take(160)) {
+                Sparkline(hist.map { it.second }, description = S.balanceTrend)
+            }
+        }
+        item { SectionTitle(S.history) }
+        val rows = statement?.rows.orEmpty().asReversed().take(30)
+        if (rows.isEmpty()) item { Hint(S.empty) }
+        items(rows.size) { i ->
+            val r = rows[i]
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(Fa.entryType(r.type) + (r.categoryId?.let { id -> report?.categoryName(id) }?.let { " — $it" } ?: ""), style = MaterialTheme.typography.bodyMedium)
+                    Hint(Fmt.date(r.date, building.calendar) + if (r.memo.isNotBlank()) "، ${r.memo}" else "")
+                }
+                Text(Fmt.signed(r.amount > 0, mf.format(kotlin.math.abs(r.amount))),
+                    color = if (r.amount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        item {
+            TextButton(onClick = { showDetails = !showDetails }) { Text(S.details) }
+            if (showDetails) {
+                SectionCard(S.occupancyHistory, subtitle = S.occupancyHint) {
+                    occ.filter { it.unitId == unitId }.sortedByDescending { it.effectiveFrom }.forEach { o ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${S.effectiveFrom} ${Fmt.date(o.effectiveFrom, building.calendar)}: ${Fmt.number(o.occupantCount.toLong())} ${S.people}", Modifier.weight(1f))
+                            TextButton(onClick = { vm.run(S.done) { vm.repos.buildings.deleteOccupancy(o.id) } }) { Text(S.delete) }
+                        }
                     }
+                    OutlinedButton(onClick = { addingOcc = true }) { Text(S.addOccupancy) }
                 }
-            }
-        }
-        item {
-            SectionCard(S.occupancyHistory, subtitle = S.occupancyHint) {
-                occ.filter { it.unitId == unitId }.sortedByDescending { it.effectiveFrom }.forEach { o ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${S.effectiveFrom} ${Fmt.date(o.effectiveFrom, building.calendar)}: ${Fmt.number(o.occupantCount.toLong())} نفر", Modifier.weight(1f))
-                        TextButton(onClick = { vm.run(S.done) { vm.repos.buildings.deleteOccupancy(o.id) } }) { Text(S.delete) }
-                    }
-                    if (o.note.isNotBlank()) Hint(o.note)
-                }
-                OutlinedButton(onClick = { addingOcc = true }) { Text(S.addOccupancy) }
-            }
-        }
-        item {
-            SectionCard(S.parking) {
-                val mine = assignments.filter { it.unitId == unitId && it.effectiveTo == null }
-                if (mine.isEmpty()) Hint(S.empty)
-                mine.forEach { a ->
-                    Text("${spaces.firstOrNull { it.id == a.spaceId }?.label ?: ""}، ${Fa.relation(a.relation)}، ${if (a.inUse) S.inUse else S.notInUse}")
+                Spacer(Modifier.height(8.dp))
+                SectionCard(S.parking) {
+                    val mine = assignments.filter { it.unitId == unitId && it.effectiveTo == null }
+                    if (mine.isEmpty()) Hint(S.empty)
+                    mine.forEach { a -> Text("${spaces.firstOrNull { it.id == a.spaceId }?.label ?: ""}، ${Fa.relation(a.relation)}، ${if (a.inUse) S.inUse else S.notInUse}") }
+                    if (unit.notes.isNotBlank()) Hint(unit.notes)
                 }
             }
         }
     }
     if (editing) UnitDialog(vm, unit, building.id) { editing = false }
+    if (paying) PaymentDialog(vm, building.id, units, building.calendar, 0, preset = unit, close = { paying = false })
     if (addingOcc) {
         val date = rememberDate(vm.today, building.calendar)
         val count = rememberCount()
@@ -260,41 +393,3 @@ fun ParkingScreen(vm: AppViewModel) {
     }
 }
 
-@Composable
-fun StatementScreen(vm: AppViewModel, unitId: String) {
-    val b by vm.building.collectAsState()
-    val building = b ?: return
-    val units by vm.units.collectAsState()
-    val categories by vm.categories.collectAsState()
-    val st by derived(vm, unitId) { vm.repos.finance.unitStatement(building.id, unitId) }
-    val statement = st ?: return
-    ScreenList {
-        item {
-            SectionCard("${S.statement} ${units.firstOrNull { it.id == unitId }?.label ?: ""}", subtitle = S.signConvention) {
-                KeyValue(S.opening, Fmt.money(statement.opening, building.minorDigits))
-                KeyValue(S.chargesTotal, Fmt.money(statement.charges, building.minorDigits))
-                KeyValue(S.paid, Fmt.money(statement.payments, building.minorDigits))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(S.balance, Modifier.weight(1f), fontWeight = FontWeight.Bold)
-                    BalanceText(statement.closing, building.minorDigits)
-                }
-            }
-        }
-        items(statement.rows.size) { i ->
-            val r = statement.rows[statement.rows.size - 1 - i]
-            SectionCard {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(Fa.entryType(r.type) + (r.categoryId?.let { id -> categories.firstOrNull { it.id == id }?.name }?.let { " — $it" } ?: ""), style = MaterialTheme.typography.bodyMedium)
-                        Hint("${Fmt.date(r.date, building.calendar)}، ${r.memo}")
-                    }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text((if (r.amount > 0) "+" else "−") + Fmt.money(kotlin.math.abs(r.amount), building.minorDigits),
-                            color = if (r.amount > 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
-                        Hint("${S.balance}: ${Fmt.money(r.balance, building.minorDigits)}")
-                    }
-                }
-            }
-        }
-    }
-}

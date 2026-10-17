@@ -138,6 +138,21 @@ class ExpenseRepository(private val r: Repos) {
             e?.description ?: "پرداخت به تامین‌کننده", reference, e?.periodId, e?.id, supplierId = sup)
     }
 
+    /**
+     * Who would pay what for [amount] under [policy] — computed with the same context as
+     * finalization (the given draft period, or the current month when there is none).
+     */
+    suspend fun previewAllocation(buildingId: String, periodId: String?, amount: Long, policy: AllocationPolicy): com.github.opscalehub.dong.domain.allocation.AllocationResult {
+        val input = if (periodId != null) {
+            r.periods.buildInput(periodId)
+        } else {
+            val m = SampleData.month(r.clock.today())
+            val tmp = com.github.opscalehub.dong.data.db.PeriodEntity("preview", buildingId, m.name, m.start, m.end, createdAt = 0)
+            r.periods.buildInputFor(tmp)
+        }
+        return com.github.opscalehub.dong.domain.allocation.AllocationEngine.allocate("preview", amount, policy, PeriodCalculator.context(input))
+    }
+
     suspend fun saveChargeItem(c: ChargeItemEntity): String = r.tx {
         if (c.name.isBlank() || c.amountMinor < 0) fail(OpError.INVALID_INPUT)
         if (c.mode == ChargeMode.WATER_TARIFF && c.amountMinor != 0L) fail(OpError.INVALID_INPUT)
@@ -344,8 +359,9 @@ class PeriodRepository(private val r: Repos) {
         dao.periods(buildingId).firstOrNull { it.status == PeriodStatus.DRAFT && date in it.startDate..it.endDate }
 
     /** Assembles the complete calculation input for a period from current data. */
-    suspend fun buildInput(periodId: String): PeriodInput {
-        val p = dao.period(periodId) ?: fail(OpError.NOT_FOUND)
+    suspend fun buildInput(periodId: String): PeriodInput = buildInputFor(dao.period(periodId) ?: fail(OpError.NOT_FOUND))
+
+    suspend fun buildInputFor(p: PeriodEntity): PeriodInput {
         val db = r.db
         val b = db.buildingDao().building(p.buildingId) ?: fail(OpError.NOT_FOUND)
         val items = db.expenseDao().chargeItems(p.buildingId).filter { it.active && it.activeFrom <= p.endDate && (it.activeTo == null || it.activeTo >= p.startDate) }

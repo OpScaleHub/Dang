@@ -13,5 +13,13 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    /** v3: display currency (e.g. show Toman while storing Rial). Existing buildings keep their display. */
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE buildings ADD COLUMN displayCurrencyName TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE buildings ADD COLUMN displayDivisor INTEGER NOT NULL DEFAULT 1")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 }

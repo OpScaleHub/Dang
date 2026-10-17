@@ -206,8 +206,10 @@ object StatementRenderer {
     fun html(d: ReportData, period: PeriodEntity, statements: Map<String, UnitStatement>, unitIds: List<String> = d.units.map { it.id }): String {
         val cal = d.building.calendar
         val result: PeriodResult? = d.periodResults[period.id]
-        val cur = esc(d.building.currencyName)
-        fun money(v: Long) = Fmt.money(v, d.building.minorDigits)
+        // Residents read the display unit (e.g. Toman); the XLSX keeps exact stored units.
+        val mf = com.github.opscalehub.dong.i18n.MoneyFormat.of(d.building)
+        val cur = esc(mf.unitName)
+        fun money(v: Long) = mf.format(v)
         return buildString {
             append("<!doctype html><html lang=\"fa\" dir=\"rtl\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">")
             append("<title>").append(esc("صورتحساب ${period.name} — ${d.building.name}")).append("</title><style>")

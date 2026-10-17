@@ -42,6 +42,7 @@ import com.github.opscalehub.dong.ui.NumberFieldState
 import com.github.opscalehub.dong.ui.ReasonDialog
 import com.github.opscalehub.dong.ui.Routes
 import com.github.opscalehub.dong.ui.S
+import com.github.opscalehub.dong.ui.money
 import com.github.opscalehub.dong.ui.ScreenList
 import com.github.opscalehub.dong.ui.SectionCard
 import com.github.opscalehub.dong.ui.SingleChoice
@@ -85,14 +86,14 @@ fun FinanceScreen(vm: AppViewModel, nav: NavController) {
         item {
             SectionCard(S.unitBalances, subtitle = S.signConvention) {
                 units.forEach { u ->
-                    ClickRow({ nav.navigate(Routes.statement(u.id)) }) {
+                    ClickRow({ nav.navigate(Routes.unit(u.id)) }) {
                         Text("${S.unit} ${u.label}", Modifier.weight(1f))
                         balances?.units?.get(u.id)?.let { BalanceText(it, digits) }
                     }
                 }
                 balances?.let {
-                    KeyValue(S.outstandingDebts, Fmt.money(it.outstandingDebts, digits), strong = true)
-                    KeyValue(S.residentCredits, Fmt.money(it.residentCredits, digits))
+                    KeyValue(S.outstandingDebts, money(it.outstandingDebts), strong = true)
+                    KeyValue(S.residentCredits, money(it.residentCredits))
                 }
             }
         }
@@ -107,7 +108,7 @@ fun FinanceScreen(vm: AppViewModel, nav: NavController) {
                             e.memo.takeIf { it.isNotBlank() }, e.method.takeIf { it.isNotBlank() }, e.reference.takeIf { it.isNotBlank() }).joinToString("، "))
                     }
                     Column(horizontalAlignment = Alignment.End) {
-                        Text(Fmt.money(amounts?.get(e.id) ?: 0, digits), style = MaterialTheme.typography.titleSmall)
+                        Text(money(amounts?.get(e.id) ?: 0), style = MaterialTheme.typography.titleSmall)
                         if (e.type in reversible && e.id !in reversed) TextButton(onClick = { reversing = e }) { Text(S.reverse) }
                     }
                 }
@@ -132,10 +133,10 @@ fun FinanceScreen(vm: AppViewModel, nav: NavController) {
 }
 
 @Composable
-private fun PaymentDialog(vm: AppViewModel, b: String, units: List<UnitEntity>, cal: com.github.opscalehub.dong.domain.model.CalendarSystem, digits: Int, close: () -> Unit) {
+fun PaymentDialog(vm: AppViewModel, b: String, units: List<UnitEntity>, cal: com.github.opscalehub.dong.domain.model.CalendarSystem, @Suppress("UNUSED_PARAMETER") digits: Int, preset: UnitEntity? = null, close: () -> Unit) {
     val cash by vm.cashAccounts.collectAsState()
-    var unit by remember { mutableStateOf<UnitEntity?>(null) }
-    val amount = rememberMoney(null, digits)
+    var unit by remember { mutableStateOf(preset) }
+    val amount = rememberMoney(null)
     var account by remember { mutableStateOf<CashAccountEntity?>(cash.firstOrNull()) }
     val date = rememberDate(vm.today, cal)
     var method by remember { mutableStateOf(S.methods.first()) }
@@ -158,7 +159,7 @@ private fun PaymentDialog(vm: AppViewModel, b: String, units: List<UnitEntity>, 
 private fun RefundDialog(vm: AppViewModel, b: String, units: List<UnitEntity>, cal: com.github.opscalehub.dong.domain.model.CalendarSystem, digits: Int, close: () -> Unit) {
     val cash by vm.cashAccounts.collectAsState()
     var unit by remember { mutableStateOf<UnitEntity?>(null) }
-    val amount = rememberMoney(null, digits)
+    val amount = rememberMoney(null)
     var account by remember { mutableStateOf<CashAccountEntity?>(cash.firstOrNull()) }
     val date = rememberDate(vm.today, cal)
     var reason by rememberSaveable { mutableStateOf("") }
@@ -179,7 +180,7 @@ private fun AdjustDialog(vm: AppViewModel, b: String, units: List<UnitEntity>, c
     val categories by vm.categories.collectAsState()
     var unit by remember { mutableStateOf<UnitEntity?>(null) }
     var credit by remember { mutableStateOf(true) }
-    val amount = rememberMoney(null, digits)
+    val amount = rememberMoney(null)
     var fund by remember { mutableStateOf<FundEntity?>(funds.firstOrNull { it.kind == FundKind.OPERATING }) }
     var category by remember { mutableStateOf<CategoryEntity?>(null) }
     val date = rememberDate(vm.today, cal)
@@ -206,7 +207,7 @@ private fun TransferDialog(vm: AppViewModel, b: String, cal: com.github.opscaleh
     val options: List<Pair<String, String>> = if (cash) accounts.map { it.id to it.name } else funds.map { it.id to it.name }
     var from by remember { mutableStateOf(options.firstOrNull()) }
     var to by remember { mutableStateOf(options.getOrNull(1)) }
-    val amount = rememberMoney(null, digits)
+    val amount = rememberMoney(null)
     val date = rememberDate(vm.today, cal)
     var memo by rememberSaveable { mutableStateOf("") }
     FormDialog(if (cash) S.cashTransfer else S.fundTransfer, close, {
@@ -228,9 +229,9 @@ private fun OpeningDialog(vm: AppViewModel, b: String, units: List<UnitEntity>, 
     val funds by vm.funds.collectAsState()
     val accounts by vm.cashAccounts.collectAsState()
     val date = rememberDate(vm.today, cal)
-    val cash = accounts.associate { it.id to rememberMoney(0, digits) }
-    val others = funds.filter { it.kind != FundKind.OPERATING }.associate { it.id to rememberMoney(0, digits) }
-    val unitFields: Map<String, NumberFieldState> = units.associate { it.id to rememberMoney(0, digits) }
+    val cash = accounts.associate { it.id to rememberMoney(0) }
+    val others = funds.filter { it.kind != FundKind.OPERATING }.associate { it.id to rememberMoney(0) }
+    val unitFields: Map<String, NumberFieldState> = units.associate { it.id to rememberMoney(0) }
     val all = cash.values + others.values + unitFields.values
     FormDialog(S.opening, close, {
         vm.run(S.saved, onSuccess = close) {

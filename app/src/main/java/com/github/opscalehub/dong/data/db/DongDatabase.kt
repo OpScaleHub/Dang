@@ -25,7 +25,7 @@ abstract class DongDatabase : RoomDatabase() {
     abstract fun restoreDao(): RestoreDao
 
     companion object {
-        const val VERSION = 2
+        const val VERSION = 3
         const val NAME = "dong.db"
 
         fun build(context: Context, name: String? = NAME): DongDatabase {

@@ -1,5 +1,31 @@
 # 05 — Test Results
 
+## UX overhaul (docs/07) — 2026-10-17
+
+- **116 JVM/Robolectric tests, 0 failures** (adds `InsightsTest` ×10: FIFO
+  collection 41,130,000 of 62,600,000 derived by hand, aging, cash-flow
+  waterfall, expenses vs last month, monthly series/reserve, water,
+  reversed payments, downward corrections; batch readings atomicity;
+  allocation preview == finalized result; setup wizard atomicity; migration
+  2→3; Toman↔Rial formatting; signed RTL numbers; bill image render).
+- **Instrumented end-to-end test, 1/1 passing** on the emulator through the new
+  UI: welcome → setup wizard → expense with preset and live preview →
+  close the month from the home checklist → payment typed in Toman →
+  reversal → reports → activity recreation.
+- **Visual review** (emulator, light and dark): home checklist, units with
+  debt aging, unit page, reports (ring, waterfall, bars, columns,
+  sparklines), batch readings with anomaly flags, expense presets/preview,
+  bill image. Defects found and fixed during the review: cyclic chart colours
+  in the unit composition (now a stable building-wide mapping), minus/plus
+  signs drifting right in RTL (now LTR-isolated), Latin digits in numeric
+  inputs, meter order in the batch screen, empty month selected by default
+  in the trend chart, non-ASCII bill file name.
+- Chart palette validated with the dataviz checker against the app's card
+  surfaces (categorical adjacent CVD ΔE ≥ 8.4; aging ramp light end ≥ 2:1).
+
+## Release 0.1.0
+
+
 Recorded on 2026-10-17 (1405/07/25) from a clean build (`./gradlew clean
 testDebugUnitTest assembleDebug assembleRelease`), JDK 17, on Linux.
 

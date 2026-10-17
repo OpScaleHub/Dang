@@ -97,11 +97,17 @@ class BuildingRepository(private val r: Repos) {
     private val dao get() = r.db.buildingDao()
 
     /** Creates a building with default funds, a cash box and editable default categories. */
-    suspend fun create(name: String, address: String = "", roundingIncrement: Long = 1, currencyName: String = "ریال"): String = r.tx {
+    /** New buildings store Rial exactly and display Toman (÷10) unless told otherwise. */
+    suspend fun create(
+        name: String, address: String = "", roundingIncrement: Long = 1, currencyName: String = "ریال",
+        displayCurrencyName: String = "تومان", displayDivisor: Long = 10,
+    ): String = r.tx {
         if (name.isBlank()) fail(OpError.INVALID_INPUT, "name")
         if (roundingIncrement < 1) fail(OpError.INVALID_INPUT, "rounding")
+        if (displayDivisor !in setOf(1L, 10L, 100L, 1000L)) fail(OpError.INVALID_INPUT, "display divisor")
         val id = newId()
-        dao.upsertBuilding(BuildingEntity(id, name.trim(), address.trim(), currencyName = currencyName, roundingIncrement = roundingIncrement, createdAt = r.clock.now()))
+        dao.upsertBuilding(BuildingEntity(id, name.trim(), address.trim(), currencyName = currencyName, roundingIncrement = roundingIncrement,
+            createdAt = r.clock.now(), displayCurrencyName = displayCurrencyName, displayDivisor = displayDivisor))
         val fin = r.db.financeDao()
         val op = FundEntity(newId(), id, "صندوق عملیاتی", FundKind.OPERATING)
         val res = FundEntity(newId(), id, "صندوق اندوخته", FundKind.RESERVE)
@@ -113,6 +119,35 @@ class BuildingRepository(private val r: Repos) {
         }
         r.journal.audit(id, "CREATE_BUILDING", "building", id, name)
         id
+    }
+
+    data class UnitDraft(val label: String, val floor: Int, val areaCentiM2: Long, val occupants: Int)
+
+    /**
+     * Setup wizard in one transaction: building, units with occupancy, optional opening
+     * cash/reserve, and the current month as the first (draft) period.
+     */
+    suspend fun setup(
+        name: String, address: String, displayToman: Boolean, roundingIncrement: Long,
+        units: List<UnitDraft>, openingCash: Long, openingReserve: Long,
+    ): String = r.tx {
+        if (units.isEmpty() || units.any { it.label.isBlank() || it.areaCentiM2 < 0 || it.occupants < 0 }) fail(OpError.INVALID_INPUT, "units")
+        if (units.map { it.label.trim() }.toSet().size != units.size) fail(OpError.INVALID_INPUT, "duplicate label")
+        val b = create(name, address, roundingIncrement, displayCurrencyName = if (displayToman) "تومان" else "", displayDivisor = if (displayToman) 10 else 1)
+        val month = SampleData.month(r.clock.today())
+        units.forEachIndexed { i, u ->
+            val e = UnitEntity(newId(), b, u.floor, u.label.trim(), u.areaCentiM2, sortOrder = i + 1)
+            saveUnit(e)
+            setOccupancy(e.id, month.start, u.occupants)
+        }
+        if (openingCash != 0L || openingReserve != 0L) {
+            val fin = r.db.financeDao()
+            val cash = fin.cashAccounts(b).first().id
+            val reserve = fin.funds(b).first { it.kind == FundKind.RESERVE }.id
+            r.finance.postOpening(b, month.start - 1, mapOf(cash to openingCash), emptyMap(), emptyMap(), mapOf(reserve to openingReserve))
+        }
+        r.periods.create(b, month.name, month.start, month.end, month.end + 10)
+        b
     }
 
     private data class Cat(val name: String, val policy: AllocationPolicy, val fund: String, val water: Boolean = false)
@@ -136,7 +171,7 @@ class BuildingRepository(private val r: Repos) {
 
     suspend fun updateSettings(b: BuildingEntity) = r.tx {
         val old = dao.building(b.id) ?: fail(OpError.NOT_FOUND)
-        if (b.name.isBlank() || b.roundingIncrement < 1 || b.minorDigits !in 0..4) fail(OpError.INVALID_INPUT)
+        if (b.name.isBlank() || b.roundingIncrement < 1 || b.minorDigits !in 0..4 || b.displayDivisor !in setOf(1L, 10L, 100L, 1000L)) fail(OpError.INVALID_INPUT)
         dao.upsertBuilding(b.copy(createdAt = old.createdAt))
         // Finalized periods keep their own settings snapshot; only drafts see the change.
         r.journal.audit(b.id, "UPDATE_SETTINGS", "building", b.id,
@@ -231,6 +266,14 @@ class WaterRepository(private val r: Repos) {
         dao.insertReading(MeterReadingEntity(id, meterId, date, valueLiters, effectiveKind, null, note, r.clock.now()))
         r.journal.audit(m.buildingId, "ADD_READING", "meter", meterId, "${m.label}: ${Fmt.cubicMeters(valueLiters)} م³ در ${Fmt.date(date)} (${Fa.readingKind(kind)})")
         id
+    }
+
+    data class ReadingInput(val meterId: String, val valueLiters: Long, val kind: ReadingKind = ReadingKind.REGULAR)
+
+    /** Saves several readings dated [date] atomically: one invalid reading rolls back the whole batch. */
+    suspend fun addReadings(date: Long, items: List<ReadingInput>, note: String = ""): List<String> = r.tx {
+        if (items.map { it.meterId }.toSet().size != items.size) fail(OpError.INVALID_INPUT, "duplicate meter")
+        items.map { addReading(it.meterId, date, it.valueLiters, it.kind, note) }
     }
 
     /** Corrects a reading by superseding it. Allowed in finalized periods; applied there only through a correction run. */

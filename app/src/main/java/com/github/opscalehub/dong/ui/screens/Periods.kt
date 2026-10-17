@@ -47,6 +47,7 @@ import com.github.opscalehub.dong.ui.KeyValue
 import com.github.opscalehub.dong.ui.ReasonDialog
 import com.github.opscalehub.dong.ui.Routes
 import com.github.opscalehub.dong.ui.S
+import com.github.opscalehub.dong.ui.money
 import com.github.opscalehub.dong.ui.ScreenList
 import com.github.opscalehub.dong.ui.SectionCard
 import com.github.opscalehub.dong.ui.TextInput
@@ -164,8 +165,8 @@ fun PeriodScreen(vm: AppViewModel, nav: NavController, periodId: String) {
             }
             item {
                 SectionCard(S.sources) {
-                    KeyValue(S.chargesTotal, Fmt.money(r.total, digits), strong = true)
-                    if (r.fundBorneTotal != 0L) KeyValue(S.fundBorne, Fmt.money(r.fundBorneTotal, digits))
+                    KeyValue(S.chargesTotal, money(r.total), strong = true)
+                    if (r.fundBorneTotal != 0L) KeyValue(S.fundBorne, money(r.fundBorneTotal))
                     r.sources.forEach { src ->
                         Divider()
                         ClickRow({ expanded = if (expanded == src.sourceId) null else src.sourceId }) {
@@ -174,15 +175,15 @@ fun PeriodScreen(vm: AppViewModel, nav: NavController, periodId: String) {
                                 Hint(src.allocation.components.joinToString(" + ") { Fa.basisKind(it.basis) + if (it.part != ComponentPart.WHOLE) " (${Fa.part(it.part)})" else "" }
                                     .ifBlank { if (src.allocation.fundBorne != 0L) S.fundBorne else "" })
                             }
-                            Text(Fmt.money(src.allocation.amount, digits))
+                            Text(money(src.allocation.amount))
                         }
                         if (expanded == src.sourceId) {
                             src.allocation.components.forEach { c ->
-                                Hint("${Fa.basisKind(c.basis)} ${Fa.part(c.part)} — ${Fmt.money(c.amount, digits)}" + if (c.fundBorne != 0L) " (${S.fundBorne})" else "")
+                                Hint("${Fa.basisKind(c.basis)} ${Fa.part(c.part)} — ${money(c.amount)}" + if (c.fundBorne != 0L) " (${S.fundBorne})" else "")
                                 c.units.forEach { u ->
                                     Row(Modifier.fillMaxWidth()) {
                                         Text("${S.unit} ${names.unit(u.unitId)}: ${Fa.quantity(u.quantityKind, u.quantity)}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                                        Text(Fmt.money(u.share, digits) + if (u.roundingAdjustment != 0L) " *" else "", style = MaterialTheme.typography.bodySmall)
+                                        Text(money(u.share) + if (u.roundingAdjustment != 0L) " *" else "", style = MaterialTheme.typography.bodySmall)
                                     }
                                 }
                             }
@@ -194,7 +195,7 @@ fun PeriodScreen(vm: AppViewModel, nav: NavController, periodId: String) {
             item {
                 SectionCard(S.perUnitTotals) {
                     val totals = r.unitTotals
-                    units.forEach { u -> KeyValue("${S.unit} ${u.label}", Fmt.money(totals[u.id] ?: 0, digits)) }
+                    units.forEach { u -> KeyValue("${S.unit} ${u.label}", money(totals[u.id] ?: 0)) }
                 }
             }
             if (r.water.meters.isNotEmpty()) {
@@ -214,7 +215,7 @@ fun PeriodScreen(vm: AppViewModel, nav: NavController, periodId: String) {
                     OutlinedButton(onClick = { vm.run { correction = vm.repos.periods.previewCorrection(periodId) } }) { Text(S.previewCorrection) }
                     correction?.let { c ->
                         if (c.diff.isEmpty()) Hint(S.noDifference) else {
-                            c.diff.forEach { d -> KeyValue("${S.unit} ${names.unit(d.unitId)}، ${names.source(d.sourceId)}", (if (d.amount > 0) "+" else "") + Fmt.money(d.amount, digits)) }
+                            c.diff.forEach { d -> KeyValue("${S.unit} ${names.unit(d.unitId)}، ${names.source(d.sourceId)}", if (d.amount > 0) Fmt.signed(true, money(d.amount)) else money(d.amount)) }
                             c.result.blockingIssues.forEach { Hint(Fa.issue(it, names), MaterialTheme.colorScheme.error) }
                             Button(onClick = { askReason = true }, enabled = c.result.canFinalize) { Text(S.applyCorrection) }
                         }

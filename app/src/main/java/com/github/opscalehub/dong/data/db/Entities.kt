@@ -39,6 +39,10 @@ data class BuildingEntity(
     val calendar: CalendarSystem = CalendarSystem.JALALI,
     val notes: String = "",
     val createdAt: Long,
+    /** Unit shown on screen (schema v3), e.g. «تومان»; empty = use [currencyName]. Storage stays in minor units. */
+    @ColumnInfo(defaultValue = "") val displayCurrencyName: String = "",
+    /** Stored minor units per display unit (power of 10; Rial → Toman = 10). */
+    @ColumnInfo(defaultValue = "1") val displayDivisor: Long = 1,
 )
 
 @Serializable

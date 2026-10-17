@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only generated bill images are shared; they live in the app cache. -->
+<paths>
+    <cache-path name="shared" path="shared/" />
+</paths>

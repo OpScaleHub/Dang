@@ -297,4 +297,23 @@ class RepositoryTest {
         expectError(OpError.INVALID_AMOUNT) { w.r.expenses.paySupplier(e.id, 100_000, w.cash, w.start) }
         assertTrue(w.r.finance.balances(w.b).reconciles)
     }
+
+    @Test
+    fun `setup wizard creates building units opening and first month atomically`() = runBlocking {
+        val w = world()
+        val units = listOf(BuildingRepository.UnitDraft("۱-۱", 1, 6_000, 2), BuildingRepository.UnitDraft("۱-۲", 1, 8_000, 3))
+        val b = w.r.buildings.setup("آزمون", "", true, 1000, units, 5_000_000, 2_000_000)
+        val bld = w.db.buildingDao().building(b)!!
+        assertEquals(10L, bld.displayDivisor)
+        assertEquals("تومان", bld.displayCurrencyName)
+        assertEquals(2, w.db.buildingDao().units(b).size)
+        assertEquals(1, w.db.periodDao().periods(b).size)
+        val bal = w.r.finance.balances(b)
+        assertEquals(5_000_000L, bal.cashTotal)
+        assertTrue(bal.reconciles)
+        // Invalid input (duplicate label) leaves nothing behind.
+        val before = w.db.buildingDao().buildings().size
+        expectError(OpError.INVALID_INPUT) { w.r.buildings.setup("x", "", false, 1, units + units.first(), 0, 0) }
+        assertEquals(before, w.db.buildingDao().buildings().size)
+    }
 }

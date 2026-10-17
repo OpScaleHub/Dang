@@ -53,6 +53,7 @@ import com.github.opscalehub.dong.ui.PolicyEditor
 import com.github.opscalehub.dong.ui.ReasonDialog
 import com.github.opscalehub.dong.ui.Routes
 import com.github.opscalehub.dong.ui.S
+import com.github.opscalehub.dong.ui.money
 import com.github.opscalehub.dong.ui.ScreenList
 import com.github.opscalehub.dong.ui.SectionCard
 import com.github.opscalehub.dong.ui.SingleChoice
@@ -94,7 +95,7 @@ fun ExpensesScreen(vm: AppViewModel, nav: NavController) {
                             Hint("${Fmt.date(e.date, building.calendar)}، ${categories.firstOrNull { it.id == e.categoryId }?.name ?: ""}، ${periods.firstOrNull { it.id == e.periodId }?.name ?: S.noPeriodAssigned}")
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(Fmt.money(e.amountMinor, building.minorDigits), style = MaterialTheme.typography.titleSmall)
+                            Text(money(e.amountMinor), style = MaterialTheme.typography.titleSmall)
                             Hint(paymentStatus(e, p))
                         }
                     }
@@ -111,6 +112,7 @@ fun paymentStatus(e: ExpenseEntity, paid: Long) = when {
     else -> S.fullyPaid
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
     val b by vm.building.collectAsState()
@@ -132,7 +134,7 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
     val date = rememberDate(existing?.date ?: vm.today, building.calendar)
     var description by rememberSaveable { mutableStateOf(existing?.description ?: "") }
     var category by remember { mutableStateOf(categories.firstOrNull { it.id == existing?.categoryId }) }
-    val amount = rememberMoney(existing?.amountMinor, building.minorDigits)
+    val amount = rememberMoney(existing?.amountMinor)
     var supplier by remember { mutableStateOf(suppliers.firstOrNull { it.id == existing?.supplierId }) }
     var fund by remember { mutableStateOf(funds.firstOrNull { it.id == existing?.fundId }) }
     var periodSel by remember { mutableStateOf<PeriodEntity?>(period ?: drafts.firstOrNull { (existing?.date ?: vm.today) in it.startDate..it.endDate }) }
@@ -141,6 +143,7 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
     var payNow by rememberSaveable { mutableStateOf(false) }
     val policy = rememberPolicyEditor(existing?.policy() ?: AllocationPolicy())
     var policyTouched by remember { mutableStateOf(existing != null) }
+    var advanced by remember { mutableStateOf(false) }
     var addingSupplier by remember { mutableStateOf(false) }
     var voiding by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf(false) }
@@ -186,8 +189,45 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
             }
         }
         item {
-            SectionCard {
-                PolicyEditor(policy, units, spaces)
+            SectionCard(S.presets) {
+                // Presets set the whole policy in one tap; the full editor stays under «پیشرفته».
+                val last = expenses.filter { it.categoryId == category?.id && it.id != existing?.id && it.status == ExpenseStatus.ACTIVE }.maxByOrNull { it.createdAt }
+                val presets = buildList {
+                    category?.let { add(S.presetCategory to it.policy()) }
+                    add(S.presetEqual to AllocationPolicy.single(Basis.Equal))
+                    add(S.presetOccupants to AllocationPolicy.single(Basis.Occupants))
+                    add(S.presetArea to AllocationPolicy.single(Basis.Area))
+                    add(S.presetWater to AllocationPolicy.single(Basis.Consumption(CommonWater.Separate(com.github.opscalehub.dong.domain.allocation.SimpleBasis.EQUAL))))
+                    last?.let { add(S.presetLast to it.policy()) }
+                    add(S.presetFund to AllocationPolicy.FUND_ONLY)
+                }
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    presets.forEach { (label, p) ->
+                        androidx.compose.material3.FilterChip(selected = pol == p, onClick = { policy.reset(p); policyTouched = true }, label = { Text(label) })
+                    }
+                }
+                Text(pol?.let { policySummary(it) } ?: S.invalidNumber, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { advanced = !advanced }) { Text(S.advanced) }
+                if (advanced) PolicyEditor(policy, units, spaces)
+            }
+        }
+        item {
+            val amt = amount.value
+            val preview by derived(vm, amt, pol, periodSel?.id) {
+                if (amt == null || amt == 0L || pol == null) null else vm.repos.expenses.previewAllocation(building.id, periodSel?.id, amt, pol)
+            }
+            SectionCard(S.whoPays) {
+                val pv = preview
+                when {
+                    amt == null || amt == 0L -> Hint(S.previewNeedsAmount)
+                    pol?.fundOnly == true -> Hint(S.fundOnly)
+                    pv == null -> Hint(S.empty)
+                    !pv.valid -> pv.issues.filter { it.blocking }.forEach { Hint(Fa.issue(it, vm.names()), MaterialTheme.colorScheme.error) }
+                    else -> com.github.opscalehub.dong.ui.charts.HBars(
+                        units.filter { it.id in pv.shares }.map { u -> com.github.opscalehub.dong.ui.charts.HBar("${S.unit} ${u.label}", pv.shares.getValue(u.id), money(pv.shares.getValue(u.id))) },
+                    )
+                }
+                if (pv != null && pv.fundBorne != 0L && pol?.fundOnly != true) Hint("${S.fundBorne}: ${money(pv.fundBorne)}")
             }
         }
         if (!locked) {
@@ -206,8 +246,8 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
         if (existing != null) {
             item {
                 SectionCard(S.paySupplier) {
-                    KeyValue(S.paid, Fmt.money(paid ?: 0, building.minorDigits))
-                    KeyValue(S.outstanding, Fmt.money(if (existing.status == ExpenseStatus.ACTIVE) existing.amountMinor - (paid ?: 0) else 0, building.minorDigits), strong = true)
+                    KeyValue(S.paid, money(paid ?: 0))
+                    KeyValue(S.outstanding, money(if (existing.status == ExpenseStatus.ACTIVE) existing.amountMinor - (paid ?: 0) else 0), strong = true)
                     payments?.filter { it.type == EntryType.SUPPLIER_PAYMENT }?.forEach { Hint("${Fmt.date(it.entryDate, building.calendar)}، ${it.reference}") }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (existing.status == ExpenseStatus.ACTIVE && (paid ?: 0) < existing.amountMinor) OutlinedButton(onClick = { paying = true }) { Text(S.paySupplier) }
@@ -230,7 +270,7 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
         }
     }
     if (paying && existing != null) {
-        val amt = rememberMoney(existing.amountMinor - (paid ?: 0), building.minorDigits)
+        val amt = rememberMoney(existing.amountMinor - (paid ?: 0))
         var from by remember { mutableStateOf(cash.firstOrNull()) }
         val d = rememberDate(vm.today, building.calendar)
         var ref by rememberSaveable { mutableStateOf("") }
@@ -318,7 +358,7 @@ fun ChargeItemsScreen(vm: AppViewModel) {
                     ClickRow({ editing = c }) {
                         Column(Modifier.weight(1f)) {
                             Text(c.name + if (!c.active) " (${S.inactive})" else "", style = MaterialTheme.typography.titleMedium)
-                            Hint("${Fa.chargeMode(c.mode)}، ${if (c.mode != ChargeMode.WATER_TARIFF) Fmt.money(c.amountMinor, building.minorDigits) else ""}، ${policySummary(c.policy())}")
+                            Hint("${Fa.chargeMode(c.mode)}، ${if (c.mode != ChargeMode.WATER_TARIFF) money(c.amountMinor) else ""}، ${policySummary(c.policy())}")
                             Hint("${S.effectiveFrom} ${Fmt.date(c.activeFrom, building.calendar)}" + (c.activeTo?.let { " ${S.effectiveTo} ${Fmt.date(it, building.calendar)}" } ?: ""))
                         }
                     }
@@ -333,7 +373,7 @@ fun ChargeItemsScreen(vm: AppViewModel) {
         var cat by remember(target.id) { mutableStateOf(categories.firstOrNull { it.id == target.categoryId }) }
         var fund by remember(target.id) { mutableStateOf(funds.firstOrNull { it.id == target.fundId }) }
         var mode by remember(target.id) { mutableStateOf(target.mode) }
-        val amount = rememberMoney(target.amountMinor, building.minorDigits)
+        val amount = rememberMoney(target.amountMinor)
         var tariff by remember(target.id) { mutableStateOf<WaterTariffEntity?>(tariffs.firstOrNull { it.id == target.tariffId }) }
         val from = rememberDate(target.activeFrom, building.calendar)
         val to = rememberDate(target.activeTo, building.calendar)

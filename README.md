@@ -11,6 +11,17 @@ backend, no account, no network permission, no analytics.
 
 ## What it does
 
+**Day to day** the app is organised around the manager's month: the home
+screen «این ماه» shows a five-step checklist (read meters → enter bills →
+review & close → send bills → collect) with live progress, key figures and
+a collection ring. Bills go to residents as an image through the phone's
+share sheet (WhatsApp, Telegram, Eitaa…), with a ready-made reminder text.
+Amounts are shown in **تومان** while stored exactly in ریال (per-building
+setting). Reports include collection rate, debt aging, a monthly cash-flow
+waterfall, expenses by category vs. last month, a 12-month billed/collected
+trend, reserve growth, water use per unit vs. the building average and an
+unexplained-water (leak) trend — all drawn in-app, offline.
+
 - **Buildings & units** — several independent buildings; units with floor,
   area, active flag and an occupancy **history** with effective dates.
 - **Parking** — spaces independent of units; owned/assigned/rented and
@@ -54,18 +65,17 @@ Requirements to build: JDK 17, Android SDK 35. Android 8.0 (API 26) or newer to 
 
 ## Use
 
-1. Open the app → **ساختمان جدید** (new building), or load the 9-unit sample
-   building (synthetic data, clearly labelled) to explore.
-2. **واحدها** — add units, areas and occupant counts (with effective dates).
-3. **کنتورهای آب** — add meters; enter readings at the end of each period.
-4. **هزینه‌ها** — record expenses; the category's policy is pre-filled and
-   can be changed per expense.
-5. **دوره‌های صورتحساب** — create the month, check the preview and the
-   explanations, then **قطعی کردن دوره** (finalize).
-6. **دریافت‌ها و مانده‌ها** — record payments, refunds and adjustments;
-   open any unit's statement.
-7. **گزارش‌ها** — export the workbook or CSV; the period screen exports the
-   HTML statement. **تنظیمات** — back up regularly.
+1. Open the app → **راه‌اندازی ساختمان** (setup wizard: details → units,
+   generated from floors × units → optional opening balances), or load the
+   9-unit demo building (synthetic data, clearly labelled).
+2. **خانه** — follow the month checklist: enter all meter readings on one
+   screen, add the month's bills (presets + a live «چه کسی چقدر
+   می‌پردازد» preview), then **بستن ماه و صدور شارژ**.
+3. **واحدها** — see who owes what (with debt aging); on a unit, record a
+   payment, **ارسال قبض** (share the bill image) or send a reminder.
+4. **گزارش** — charts for the month and the trend; export the XLSX workbook
+   or CSV. **بیشتر** — meters and tariffs, parking, categories, recurring
+   charges, all transactions, settings and **backup** (do it regularly).
 
 ### Data, backup and sharing
 
@@ -80,7 +90,7 @@ Requirements to build: JDK 17, Android SDK 35. Android 8.0 (API 26) or newer to 
 ## Test
 
 ```bash
-./gradlew testDebugUnitTest                      # 101 JVM + Robolectric tests
+./gradlew testDebugUnitTest                      # 116 JVM + Robolectric tests
 ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest   # UI end-to-end (wipes app data!)
 python workbook/verify_workbook.py               # needs openpyxl + formulas
 ```
@@ -95,8 +105,9 @@ app/src/main/java/com/github/opscalehub/dong/
   data/     Room entities/DAOs/migrations, repositories, sample data, backup
   io/       XLSX writer, CSV, HTML statement, backup codec
   i18n/     Persian labels and number/date formatting
-  ui/       Jetpack Compose screens (Persian, RTL)
-app/schemas/   exported Room schemas (v1, v2)
+  ui/       Jetpack Compose screens (Persian, RTL); ui/charts = in-app charts
+  share/    bill image rendering + share sheet (FileProvider, no permissions)
+app/schemas/   exported Room schemas (v1–v3)
 workbook/      accounting prototype workbook + generator + verifier
 docs/          requirements, domain model, plan, architecture, tests, roadmap
 ```
@@ -109,5 +120,9 @@ docs/          requirements, domain model, plan, architecture, tests, roadmap
 4. [Architecture and extension points](docs/04-architecture-and-extensibility.md)
 5. [Test results](docs/05-test-results.md)
 6. [Known limitations and roadmap](docs/06-limitations-and-roadmap.md)
+7. [UX & reporting overhaul plan](docs/07-ux-plan.md)
 
 All sample data in this repository is synthetic.
+
+Font: [Vazirmatn](https://github.com/rastikerdar/vazirmatn), SIL Open Font
+License 1.1 (see `licenses/Vazirmatn-OFL.txt`).
