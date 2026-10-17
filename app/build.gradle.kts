@@ -42,8 +42,9 @@ android {
         }
     }
     sourceSets {
-        // Exported Room schemas are needed by MigrationTestHelper in JVM (Robolectric) tests.
-        getByName("test").assets.srcDir("$projectDir/schemas")
+        // Exported Room schemas are read by MigrationTestHelper in Robolectric tests, which see the
+        // merged debug assets. Debug builds only; release APKs do not contain them.
+        getByName("debug").assets.srcDir("$projectDir/schemas")
     }
     testOptions {
         unitTests {

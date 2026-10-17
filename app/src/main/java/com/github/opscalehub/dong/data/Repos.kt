@@ -1,0 +1,272 @@
+package com.github.opscalehub.dong.data
+
+import androidx.room.withTransaction
+import com.github.opscalehub.dong.data.db.AuditEventEntity
+import com.github.opscalehub.dong.data.db.BuildingEntity
+import com.github.opscalehub.dong.data.db.CashAccountEntity
+import com.github.opscalehub.dong.data.db.CashKind
+import com.github.opscalehub.dong.data.db.CategoryEntity
+import com.github.opscalehub.dong.data.db.DongDatabase
+import com.github.opscalehub.dong.data.db.FundEntity
+import com.github.opscalehub.dong.data.db.FundKind
+import com.github.opscalehub.dong.data.db.JournalEntryEntity
+import com.github.opscalehub.dong.data.db.JournalLineEntity
+import com.github.opscalehub.dong.data.db.MeterEntity
+import com.github.opscalehub.dong.data.db.MeterReadingEntity
+import com.github.opscalehub.dong.data.db.OccupancyEntity
+import com.github.opscalehub.dong.data.db.ParkingAssignmentEntity
+import com.github.opscalehub.dong.data.db.ParkingSpaceEntity
+import com.github.opscalehub.dong.data.db.PeriodStatus
+import com.github.opscalehub.dong.data.db.UnitEntity
+import com.github.opscalehub.dong.data.db.WaterTariffEntity
+import com.github.opscalehub.dong.domain.allocation.AllocationPolicy
+import com.github.opscalehub.dong.domain.allocation.Basis
+import com.github.opscalehub.dong.domain.allocation.CommonWater
+import com.github.opscalehub.dong.domain.allocation.SimpleBasis
+import com.github.opscalehub.dong.domain.allocation.SpaceFilter
+import com.github.opscalehub.dong.domain.ledger.EntryType
+import com.github.opscalehub.dong.domain.ledger.LedgerException
+import com.github.opscalehub.dong.domain.ledger.Posting
+import com.github.opscalehub.dong.domain.ledger.PostingRules
+import com.github.opscalehub.dong.domain.model.MeterRole
+import com.github.opscalehub.dong.domain.model.ParkingRelation
+import com.github.opscalehub.dong.domain.model.ReadingKind
+import com.github.opscalehub.dong.domain.model.TariffTier
+import com.github.opscalehub.dong.domain.water.TariffCalculator
+
+/** Entry point to all repositories; shares the database, clock and journal writer. */
+class Repos(val db: DongDatabase, val clock: Clock = SystemClock) {
+    val buildings = BuildingRepository(this)
+    val water = WaterRepository(this)
+    val expenses = ExpenseRepository(this)
+    val finance = FinanceRepository(this)
+    val periods = PeriodRepository(this)
+    internal val journal = JournalWriter(this)
+
+    suspend fun <T> tx(block: suspend () -> T): T = db.withTransaction(block)
+
+    /** True if [date] falls inside a finalized period of the building. */
+    internal suspend fun locked(buildingId: String, date: Long): Boolean =
+        db.periodDao().periods(buildingId).any { it.status == PeriodStatus.FINALIZED && date in it.startDate..it.endDate }
+
+    internal suspend fun lastFinalizedEnd(buildingId: String): Long? =
+        db.periodDao().periods(buildingId).filter { it.status == PeriodStatus.FINALIZED }.maxOfOrNull { it.endDate }
+}
+
+/** The only writer of journal entries: validates balance, appends, and records an audit event. */
+class JournalWriter(private val r: Repos) {
+
+    suspend fun post(
+        buildingId: String,
+        type: EntryType,
+        date: Long,
+        postings: List<Posting>,
+        memo: String = "",
+        reference: String = "",
+        periodId: String? = null,
+        expenseId: String? = null,
+        unitId: String? = null,
+        supplierId: String? = null,
+        reversesEntryId: String? = null,
+        method: String = "",
+    ): String {
+        val balanced = try {
+            PostingRules.balanced(postings)
+        } catch (e: LedgerException) {
+            fail(OpError.NOT_BALANCED, e.message ?: "")
+        }
+        val id = newId()
+        val dao = r.db.financeDao()
+        dao.insertEntry(JournalEntryEntity(id, buildingId, date, type, memo, reference, periodId, expenseId, unitId, supplierId, reversesEntryId, r.clock.now(), method))
+        dao.insertLines(balanced.map {
+            JournalLineEntity(newId(), id, buildingId, it.account, it.amount, it.cashAccountId, it.unitId, it.supplierId, it.fundId, it.categoryId)
+        })
+        audit(buildingId, "POST_${type.name}", "journal_entry", id, memo)
+        return id
+    }
+
+    suspend fun audit(buildingId: String, action: String, entityType: String, entityId: String, summary: String) {
+        r.db.financeDao().insertAudit(AuditEventEntity(newId(), buildingId, r.clock.now(), action, entityType, entityId, summary.take(500)))
+    }
+}
+
+class BuildingRepository(private val r: Repos) {
+    private val dao get() = r.db.buildingDao()
+
+    /** Creates a building with default funds, a cash box and editable default categories. */
+    suspend fun create(name: String, address: String = "", roundingIncrement: Long = 1, currencyName: String = "ریال"): String = r.tx {
+        if (name.isBlank()) fail(OpError.INVALID_INPUT, "name")
+        if (roundingIncrement < 1) fail(OpError.INVALID_INPUT, "rounding")
+        val id = newId()
+        dao.upsertBuilding(BuildingEntity(id, name.trim(), address.trim(), currencyName = currencyName, roundingIncrement = roundingIncrement, createdAt = r.clock.now()))
+        val fin = r.db.financeDao()
+        val op = FundEntity(newId(), id, "صندوق عملیاتی", FundKind.OPERATING)
+        val res = FundEntity(newId(), id, "صندوق اندوخته", FundKind.RESERVE)
+        fin.upsertFund(op)
+        fin.upsertFund(res)
+        fin.upsertCashAccount(CashAccountEntity(newId(), id, "صندوق نقدی", CashKind.CASH_BOX))
+        defaultCategories(op.id, res.id).forEachIndexed { i, (n, p, fund, water) ->
+            r.db.expenseDao().upsertCategory(CategoryEntity(newId(), id, n, p.encode(), fund, water, true, i))
+        }
+        r.journal.audit(id, "CREATE_BUILDING", "building", id, name)
+        id
+    }
+
+    private data class Cat(val name: String, val policy: AllocationPolicy, val fund: String, val water: Boolean = false)
+
+    /** Examples only — every policy is editable per building and per expense. */
+    private fun defaultCategories(op: String, res: String) = listOf(
+        Cat("نظافت", AllocationPolicy.single(Basis.Occupants), op),
+        Cat("تعمیر و نگهداری ساختمان", AllocationPolicy.single(Basis.Area), op),
+        Cat("سرویس آسانسور", AllocationPolicy.single(Basis.Equal), op),
+        Cat("برق مشاعات", AllocationPolicy.single(Basis.Equal), op),
+        Cat("آب", AllocationPolicy.single(Basis.Consumption(CommonWater.Separate(SimpleBasis.EQUAL))), op, water = true),
+        Cat("لوله‌کشی", AllocationPolicy.single(Basis.Equal), op),
+        Cat("هزینه‌های پارکینگ", AllocationPolicy.single(Basis.Parking(SpaceFilter.IN_USE)), op),
+        Cat("فضای سبز", AllocationPolicy.single(Basis.Equal), op),
+        Cat("نگهبانی و امنیت", AllocationPolicy.single(Basis.Equal), op),
+        Cat("هزینه‌های اداری", AllocationPolicy.single(Basis.Equal), op),
+        Cat("حق اندوخته", AllocationPolicy.single(Basis.Equal), res),
+        Cat("تعمیرات اضطراری", AllocationPolicy.FUND_ONLY, res),
+        Cat("سایر هزینه‌ها", AllocationPolicy.single(Basis.Equal), op),
+    )
+
+    suspend fun updateSettings(b: BuildingEntity) = r.tx {
+        val old = dao.building(b.id) ?: fail(OpError.NOT_FOUND)
+        if (b.name.isBlank() || b.roundingIncrement < 1 || b.minorDigits !in 0..4) fail(OpError.INVALID_INPUT)
+        dao.upsertBuilding(b.copy(createdAt = old.createdAt))
+        // Finalized periods keep their own settings snapshot; only drafts see the change.
+        r.journal.audit(b.id, "UPDATE_SETTINGS", "building", b.id,
+            "rounding ${old.roundingIncrement}→${b.roundingIncrement}, occupancy ${old.occupancyBasis}→${b.occupancyBasis}, calendar ${old.calendar}→${b.calendar}")
+    }
+
+    suspend fun delete(buildingId: String) = r.tx { dao.deleteBuilding(buildingId) }
+
+    suspend fun saveUnit(u: UnitEntity): String = r.tx {
+        if (u.label.isBlank() || u.areaCentiM2 < 0) fail(OpError.INVALID_INPUT)
+        val others = dao.units(u.buildingId).filter { it.id != u.id }
+        if (others.any { it.label.trim() == u.label.trim() }) fail(OpError.INVALID_INPUT, "duplicate label")
+        val existing = dao.unit(u.id)
+        dao.upsertUnit(u.copy(label = u.label.trim()))
+        r.journal.audit(u.buildingId, if (existing == null) "CREATE_UNIT" else "UPDATE_UNIT", "unit", u.id,
+            "${u.label}: area ${existing?.areaCentiM2}→${u.areaCentiM2}, active ${existing?.active}→${u.active}")
+        u.id
+    }
+
+    suspend fun nextUnitSortOrder(buildingId: String) = (dao.units(buildingId).maxOfOrNull { it.sortOrder } ?: 0) + 1
+
+    /** Records an occupancy change effective from [effectiveFrom]. History is kept; finalized snapshots are unaffected. */
+    suspend fun setOccupancy(unitId: String, effectiveFrom: Long, count: Int, note: String = ""): String = r.tx {
+        if (count < 0) fail(OpError.INVALID_INPUT, "count")
+        val unit = dao.unit(unitId) ?: fail(OpError.NOT_FOUND)
+        val id = newId()
+        dao.insertOccupancy(OccupancyEntity(id, unitId, effectiveFrom, count, note, r.clock.now()))
+        val backdated = r.lastFinalizedEnd(unit.buildingId)?.let { effectiveFrom <= it } == true
+        r.journal.audit(unit.buildingId, "SET_OCCUPANCY", "unit", unitId,
+            "${unit.label}: $count from $effectiveFrom" + if (backdated) " (backdated into a finalized period; apply via correction)" else "")
+        id
+    }
+
+    suspend fun deleteOccupancy(id: String) = r.tx {
+        val o = dao.occupancyRecord(id) ?: fail(OpError.NOT_FOUND)
+        val unit = dao.unit(o.unitId) ?: fail(OpError.NOT_FOUND)
+        if (r.lastFinalizedEnd(unit.buildingId)?.let { o.effectiveFrom <= it } == true) fail(OpError.LOCKED_BY_FINALIZED_PERIOD)
+        dao.deleteOccupancy(id)
+        r.journal.audit(unit.buildingId, "DELETE_OCCUPANCY", "unit", unit.id, "${unit.label}: removed record from ${o.effectiveFrom}")
+    }
+
+    suspend fun saveSpace(s: ParkingSpaceEntity): String = r.tx {
+        if (s.label.isBlank()) fail(OpError.INVALID_INPUT)
+        dao.upsertSpace(s.copy(label = s.label.trim()))
+        r.journal.audit(s.buildingId, "SAVE_PARKING_SPACE", "parking_space", s.id, s.label)
+        s.id
+    }
+
+    /** Assigns a space from [from]; the space's previous open assignment ends the day before. */
+    suspend fun assignSpace(spaceId: String, unitId: String, relation: ParkingRelation, inUse: Boolean, vehicle: String, from: Long): String = r.tx {
+        val unit = dao.unit(unitId) ?: fail(OpError.NOT_FOUND)
+        dao.assignments(unit.buildingId).filter { it.spaceId == spaceId && it.effectiveTo == null }.forEach {
+            if (it.effectiveFrom >= from) fail(OpError.INVALID_INPUT, "overlapping assignment")
+            dao.upsertAssignment(it.copy(effectiveTo = from - 1))
+        }
+        val id = newId()
+        dao.upsertAssignment(ParkingAssignmentEntity(id, spaceId, unitId, relation, inUse, vehicle, from))
+        r.journal.audit(unit.buildingId, "ASSIGN_PARKING", "parking_space", spaceId, "→ ${unit.label} ($relation, inUse=$inUse) from $from")
+        id
+    }
+
+    suspend fun endAssignment(assignmentId: String, to: Long) = r.tx {
+        val a = dao.assignment(assignmentId) ?: fail(OpError.NOT_FOUND)
+        if (to < a.effectiveFrom) fail(OpError.INVALID_INPUT)
+        dao.upsertAssignment(a.copy(effectiveTo = to))
+    }
+}
+
+class WaterRepository(private val r: Repos) {
+    private val dao get() = r.db.waterDao()
+
+    suspend fun saveMeter(m: MeterEntity): String = r.tx {
+        if (m.label.isBlank()) fail(OpError.INVALID_INPUT)
+        if (m.role == MeterRole.UNIT && m.unitId == null) fail(OpError.INVALID_INPUT, "unit meter needs a unit")
+        if (m.rolloverLimitLiters != null && m.rolloverLimitLiters <= 0) fail(OpError.INVALID_INPUT)
+        dao.upsertMeter(m)
+        r.journal.audit(m.buildingId, "SAVE_METER", "meter", m.id, "${m.label} ${m.role}")
+        m.id
+    }
+
+    /** Adds a reading. Readings dated inside a finalized period must be entered as corrections instead. */
+    suspend fun addReading(meterId: String, date: Long, valueLiters: Long, kind: ReadingKind = ReadingKind.REGULAR, note: String = ""): String = r.tx {
+        val m = dao.meter(meterId) ?: fail(OpError.NOT_FOUND)
+        if (valueLiters < 0) fail(OpError.INVALID_AMOUNT)
+        if (r.locked(m.buildingId, date)) fail(OpError.LOCKED_BY_FINALIZED_PERIOD)
+        val id = newId()
+        dao.insertReading(MeterReadingEntity(id, meterId, date, valueLiters, kind, null, note, r.clock.now()))
+        r.journal.audit(m.buildingId, "ADD_READING", "meter", meterId, "${m.label}: $valueLiters L on $date ($kind)")
+        id
+    }
+
+    /** Corrects a reading by superseding it. Allowed in finalized periods; applied there only through a correction run. */
+    suspend fun correctReading(readingId: String, newValueLiters: Long, reason: String): String = r.tx {
+        if (reason.isBlank()) fail(OpError.REASON_REQUIRED)
+        if (newValueLiters < 0) fail(OpError.INVALID_AMOUNT)
+        val old = dao.reading(readingId) ?: fail(OpError.NOT_FOUND)
+        if (dao.supersededCount(readingId) > 0) fail(OpError.ALREADY_REVERSED)
+        val m = dao.meter(old.meterId) ?: fail(OpError.NOT_FOUND)
+        val id = newId()
+        dao.insertReading(old.copy(id = id, valueLiters = newValueLiters, supersedesId = old.id, note = reason, enteredAt = r.clock.now()))
+        r.journal.audit(m.buildingId, "CORRECT_READING", "meter", m.id, "${m.label}: ${old.valueLiters}→$newValueLiters L on ${old.readingDate}: $reason")
+        id
+    }
+
+    suspend fun deleteReading(readingId: String) = r.tx {
+        val rd = dao.reading(readingId) ?: fail(OpError.NOT_FOUND)
+        val m = dao.meter(rd.meterId) ?: fail(OpError.NOT_FOUND)
+        if (r.lastFinalizedEnd(m.buildingId)?.let { rd.readingDate <= it } == true) fail(OpError.LOCKED_BY_FINALIZED_PERIOD)
+        if (dao.supersededCount(readingId) > 0) fail(OpError.LOCKED_BY_FINALIZED_PERIOD)
+        dao.deleteReading(readingId)
+        r.journal.audit(m.buildingId, "DELETE_READING", "meter", m.id, "${m.label}: ${rd.valueLiters} L on ${rd.readingDate}")
+    }
+
+    /** Replaces a meter: FINAL reading on the old one, a new meter with an INITIAL reading, same unit. */
+    suspend fun replaceMeter(oldMeterId: String, date: Long, finalValueLiters: Long, newLabel: String, newSerial: String, initialValueLiters: Long): String = r.tx {
+        val old = dao.meter(oldMeterId) ?: fail(OpError.NOT_FOUND)
+        if (old.retiredOn != null) fail(OpError.INVALID_INPUT, "already retired")
+        addReading(oldMeterId, date, finalValueLiters, ReadingKind.FINAL, "تعویض کنتور")
+        dao.upsertMeter(old.copy(retiredOn = date))
+        val newId = newId()
+        dao.upsertMeter(MeterEntity(newId, old.buildingId, old.unitId, old.role, newLabel.ifBlank { old.label }, newSerial, old.rolloverLimitLiters, date, null, old.id))
+        addReading(newId, date, initialValueLiters, ReadingKind.INITIAL, "قرائت اولیه کنتور جدید")
+        r.journal.audit(old.buildingId, "REPLACE_METER", "meter", old.id, "${old.label} → $newLabel on $date")
+        newId
+    }
+
+    suspend fun saveTariff(t: WaterTariffEntity): String = r.tx {
+        if (!TariffCalculator.validate(t.toDomain())) fail(OpError.INVALID_INPUT, "tariff")
+        dao.upsertTariff(t)
+        r.journal.audit(t.buildingId, "SAVE_TARIFF", "water_tariff", t.id, "${t.name} from ${t.effectiveFrom}")
+        t.id
+    }
+
+    fun tariffOf(buildingId: String, name: String, from: Long, fixedFee: Long, tiers: List<TariffTier>, surchargeBp: Int, commonRate: Long, id: String = newId()) =
+        WaterTariffEntity(id, buildingId, name, from, fixedFee, encodeTiers(tiers), surchargeBp, commonRate)
+}
