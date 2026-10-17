@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A building split into shares: the idea of "dong". -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M36,30h36v50h-36z" />
+    <path android:fillColor="#00695C"
+        android:pathData="M41,36h8v7h-8zM59,36h8v7h-8zM41,48h8v7h-8zM59,48h8v7h-8zM41,60h8v7h-8zM59,60h8v7h-8zM50,70h8v10h-8z" />
+    <path android:fillColor="#FFD54F"
+        android:pathData="M54,22l22,10h-44z" />
+</vector>
