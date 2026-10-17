@@ -1,0 +1,68 @@
+# 05 — Test Results
+
+Recorded on 2026-10-17 (1405/07/25) from a clean build (`./gradlew clean
+testDebugUnitTest assembleDebug assembleRelease`), JDK 17, on Linux.
+
+## Automated tests — 101 JVM/Robolectric tests, 0 failures
+
+| Suite | Tests | What it covers |
+|---|---:|---|
+| `domain.money.AllocatorTest` | 9 | exact sums, rounding increment, largest remainder, ties, overflow, 2,000-case property test |
+| `domain.allocation.AllocationEngineTest` | 22 | equal, occupants (day-weighted, start/end), area, weighted, explicit, parking (in-use/owned/selected/weights), fixed+variable, percent, subsets, zero eligible, zero basis, missing area/occupancy, inactive units, unknown units, credits, fund-only, rate charges, policy JSON |
+| `domain.water.WaterTest` | 21 | normal, zero, negative, rollover, missing readings, reset, new meter, corrections, retired meters, replacement, main-meter reconciliation, unit > main, proportional / separate / fund-borne common water, tiered tariffs, fixed fee, surcharge, tariff changes, double-charge guard |
+| `domain.ledger.LedgerTest` | 8 | opening/closing, partial payments, overpayment, debts, supplier payments, refunds, adjustments, reserve contributions and transfers, reversals, cash transfers, invariants |
+| `domain.period.PeriodTest` | 5 | invalid dates, empty period, invalid expense blocks, missing reading blocks, correction diff |
+| `domain.WorkbookScenarioTest` | 3 | every share and balance equals `workbook/expected-results.json`; snapshot round trip |
+| `domain.calendar.JalaliTest` | 4 | Nowruz dates, leap years, 200-year round trip, Persian-digit parsing |
+| `i18n.FormatTest` | 4 | Persian digits, grouping, unambiguous m³ display, parsing round trips |
+| `data.RepositoryTest` | 15 | multi-building isolation, restart retention (file DB), transaction rollback, expense lifecycle, finalize + immutability, blocked finalize writes nothing, overlap, correction after finalization, opening/payments/refunds/adjustments/transfers, charges not reversible, occupancy history, 3 audit regressions |
+| `data.MigrationTest` | 2 | v1→v2 migration preserves financial rows; all versions covered |
+| `data.SampleDataTest` | 1 | demo data loads and reconciles on 7 different dates (month/year boundaries, leap Esfand) |
+| `io.ExportBackupTest` | 7 | demo data end-to-end equals workbook reference; backup round trip incl. idempotent re-import; checksum/format/version rejection; structural validation; replace vs. diverged merge; XLSX well-formed + RTL; CSV injection guard; HTML statement |
+
+Mutation checks were run on the allocator tie-break and on the correction
+fix: in both cases the suite failed when the code was deliberately broken.
+
+## Instrumented end-to-end test — 1 test, 0 failures
+
+`EndToEndTest.fullMonthThroughTheUi` (Android 14 emulator) drives the real
+Compose UI: onboarding → new building → two units with occupants → period →
+expense (per-occupant policy from the category) → preview → finalize →
+payment → reversal with reason → activity recreation, asserting both screen
+text and ledger balances (400,000 / 600,000 split, reconciliation).
+
+Run it on an emulator only — it wipes the app's data:
+`ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest`.
+
+## Workbook
+
+`workbook/verify_workbook.py`: 8,776 cells evaluated, **0 formula errors, 40/40
+checks «درست»**. The checker was itself validated by injecting a `#DIV/0!` and a
+negative meter reading (both detected).
+
+## Manual / on-device verification
+
+| Check | Result |
+|---|---|
+| Fresh install, onboarding, demo building (emulator, Android 14) | OK; balances equal the workbook (cash 69,000,000; reserve 51,000,000; net receivables 21,400,000) |
+| Reading entry for 10 meters, a reading correction with reason, unit-meters-exceed-main warning | OK |
+| Finalize current month through the UI, confirmation dialog | OK |
+| Payment entry, balances update | OK |
+| XLSX export via the system file picker, pulled and evaluated externally | OK — debits = credits (289,802,000) |
+| Backup → wipe app data → restore from onboarding | OK — all unit balances, cash, row counts and period snapshots identical |
+| Dark mode | OK |
+| Install and launch on a physical OnePlus Nord over Wi-Fi debugging | OK |
+| APK permissions (`aapt2 dump permissions`) | no INTERNET; only AndroidX's private receiver permission |
+
+## Defects found by these tests and fixed
+
+1. Workbook explicit-amount check used `N()` on a range (only first cell).
+2. Demo load used two transactions (an empty building could appear).
+3. Middle-dot separator «·» resembled Persian zero «۰».
+4. m³ shown with 3 decimals read as thousands (`۲۶٫۵۰۰`).
+5. Restore unreachable on a fresh install.
+6. Creating the first building showed a spurious "unexpected error".
+7. Extended FAB had no accessible label.
+8. Corrections could move finalized charges after a unit was deactivated.
+9. A new meter's first reading blocked its first period.
+10. Supplier payments against credit notes were accepted.

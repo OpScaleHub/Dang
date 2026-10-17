@@ -15,7 +15,8 @@ domain (pure Kotlin, no android.*)       ──► .../domain
   ├─ period       period calculator (inputs → charge lines + issues)
   └─ ledger       double-entry posting rules, balances, invariants
 io (xlsx writer, csv, html statement, backup codec) ──► .../io
-sync (interfaces only: ExportTarget, future SyncProvider) ──► .../sync
+i18n (Persian labels, number/date formatting)   ──► .../i18n
+(extension points for sync/sharing: see docs/04 — no speculative code)
 ```
 
 The domain package has **no Android imports** and is covered by plain JVM unit
