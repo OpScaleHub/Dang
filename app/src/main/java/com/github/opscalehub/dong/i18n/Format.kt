@@ -51,7 +51,10 @@ object Fmt {
     fun cubicMeters(liters: Long, persian: Boolean = true): String {
         val neg = liters < 0
         val a = if (neg) -liters else liters
-        val s = (if (neg) "−" else "") + grouped(a / 1000) + "٫" + (a % 1000).toString().padStart(3, '0')
+        // Trailing zeros are dropped ("۲۶٫۵", not "۲۶٫۵۰۰"): in many Persian fonts the decimal mark ٫
+        // looks like the thousands separator ٬, so three decimals would read as thousands.
+        val frac = (a % 1000).toString().padStart(3, '0').trimEnd('0')
+        val s = (if (neg) "−" else "") + grouped(a / 1000) + if (frac.isEmpty()) "" else "٫$frac"
         return if (persian) digits(s) else s.replace('٬', ',').replace('٫', '.').replace('−', '-')
     }
 

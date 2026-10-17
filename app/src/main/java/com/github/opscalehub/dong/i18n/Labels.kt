@@ -193,6 +193,21 @@ object Fa {
         }
     }
 
+    /** Audit action codes are stable machine identifiers; this maps them for display. */
+    fun auditAction(code: String): String = when {
+        code.startsWith("POST_") -> runCatching { "ثبت سند: " + entryType(EntryType.valueOf(code.removePrefix("POST_"))) }.getOrDefault(code)
+        code.startsWith("RESTORE_") -> "بازیابی از پشتیبان"
+        else -> mapOf(
+            "CREATE_BUILDING" to "ایجاد ساختمان", "UPDATE_SETTINGS" to "تغییر تنظیمات", "CREATE_UNIT" to "ایجاد واحد", "UPDATE_UNIT" to "ویرایش واحد",
+            "SET_OCCUPANCY" to "تغییر تعداد ساکنان", "DELETE_OCCUPANCY" to "حذف سابقه سکونت", "SAVE_PARKING_SPACE" to "ثبت جای پارک",
+            "ASSIGN_PARKING" to "تخصیص پارکینگ", "SAVE_METER" to "ثبت کنتور", "ADD_READING" to "ثبت قرائت", "CORRECT_READING" to "اصلاح قرائت",
+            "DELETE_READING" to "حذف قرائت", "REPLACE_METER" to "تعویض کنتور", "SAVE_TARIFF" to "ثبت تعرفه", "SAVE_CATEGORY" to "ثبت دسته هزینه",
+            "UPDATE_EXPENSE" to "ویرایش هزینه", "VOID_EXPENSE" to "ابطال هزینه", "SAVE_CHARGE_ITEM" to "ثبت قلم شارژ", "CREATE_PERIOD" to "ایجاد دوره",
+            "DELETE_PERIOD" to "حذف دوره", "FINALIZE_PERIOD" to "قطعی کردن دوره", "CORRECT_PERIOD" to "اصلاحیه دوره", "ADD_FUND" to "ایجاد صندوق",
+            "ADD_CASH_ACCOUNT" to "ایجاد حساب نقد", "DEMO_DATA" to "بارگذاری داده نمایشی",
+        )[code] ?: code
+    }
+
     fun error(e: OpError) = when (e) {
         OpError.NOT_FOUND -> "مورد پیدا نشد."
         OpError.INVALID_AMOUNT -> "مبلغ نامعتبر است."

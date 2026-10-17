@@ -17,6 +17,7 @@ import com.github.opscalehub.dong.domain.model.ChargeMode
 import com.github.opscalehub.dong.domain.model.MeterRole
 import com.github.opscalehub.dong.domain.model.ParkingRelation
 import com.github.opscalehub.dong.domain.model.ReadingKind
+import com.github.opscalehub.dong.i18n.Fmt
 
 /**
  * The 9-unit sample building from the brief. Occupant counts, parking, meters,
@@ -44,7 +45,7 @@ object SampleData {
         while (m > 12) { m -= 12; y++ }
         val start = Jalali.toEpochDay(y, m, 1)
         val end = Jalali.toEpochDay(y, m, Jalali.monthLength(y, m))
-        return Month(start, end, "${Jalali.monthNames[m - 1]} $y")
+        return Month(start, end, "${Jalali.monthNames[m - 1]} ${Fmt.digits(y.toString())}")
     }
 
     /** Creates the sample building (structure + sample occupancy). Returns its id. */
@@ -52,7 +53,7 @@ object SampleData {
         val b = r.buildings.create(name, "نشانی نمونه", roundingIncrement = 1000)
         val from = month(r.clock.today(), -2).start
         UNITS.forEachIndexed { i, (floor, no, ao) ->
-            val u = UnitEntity(newId(), b, floor, "$floor-$no", ao.first * 100L, notes = NOTE, sortOrder = i + 1)
+            val u = UnitEntity(newId(), b, floor, Fmt.digits("$floor-$no"), ao.first * 100L, notes = NOTE, sortOrder = i + 1)
             r.buildings.saveUnit(u)
             r.buildings.setOccupancy(u.id, from, ao.second, NOTE)
         }
@@ -62,7 +63,7 @@ object SampleData {
     /** Adds synthetic demo activity covering every feature of the brief's sample list. */
     suspend fun addDemoData(r: Repos, b: String): Unit = r.tx {
         val db = r.db
-        val units = db.buildingDao().units(b).associateBy { it.label }
+        val units = db.buildingDao().units(b).associateBy { Fmt.latin(it.label) }
         fun u(label: String) = units.getValue(label).id
         val funds = db.financeDao().funds(b)
         val op = funds.first { it.kind == FundKind.OPERATING }.id
@@ -94,12 +95,12 @@ object SampleData {
         )
         val meters = mutableMapOf<String, String>()
         for ((label, rd) in readings) {
-            val m = r.water.saveMeter(MeterEntity(newId(), b, u(label), MeterRole.UNIT, "کنتور $label", rolloverLimitLiters = if (label == "1-3") 10_000_000 else null, notes = NOTE))
+            val m = r.water.saveMeter(MeterEntity(newId(), b, u(label), MeterRole.UNIT, "کنتور ${Fmt.digits(label)}", rolloverLimitLiters = if (label == "1-3") 10_000_000 else null, notes = NOTE))
             meters[label] = m
             r.water.addReading(m, prev.start - 1, rd.first)
             when (label) {
                 "1-3" -> r.water.addReading(m, prev.end, rd.second, ReadingKind.ROLLOVER, "گردش کنتور (نمونه)")
-                "2-2" -> meters[label] = r.water.replaceMeter(m, prev.start + 14, rd.second, "کنتور جدید 2-2", "", 0).also { r.water.addReading(it, prev.end, 6_100) }
+                "2-2" -> meters[label] = r.water.replaceMeter(m, prev.start + 14, rd.second, "کنتور جدید ${Fmt.digits("2-2")}", "", 0).also { r.water.addReading(it, prev.end, 6_100) }
                 else -> r.water.addReading(m, prev.end, rd.second)
             }
         }

@@ -1,5 +1,7 @@
 package com.github.opscalehub.dong.data
 
+import com.github.opscalehub.dong.i18n.Fa
+import com.github.opscalehub.dong.i18n.Fmt
 import com.github.opscalehub.dong.data.db.CategoryEntity
 import com.github.opscalehub.dong.data.db.ChargeItemEntity
 import com.github.opscalehub.dong.data.db.ExpenseEntity
@@ -89,7 +91,7 @@ class ExpenseRepository(private val r: Repos) {
                 e.description, e.documentRef, e.periodId, e.id, supplierId = e.supplierId)
         }
         dao.updateExpense(e.copy(journalEntryId = entryId, status = old.status, createdAt = old.createdAt))
-        r.journal.audit(e.buildingId, "UPDATE_EXPENSE", "expense", e.id, "${old.amountMinor}→${e.amountMinor} ${old.description}→${e.description} $reason")
+        r.journal.audit(e.buildingId, "UPDATE_EXPENSE", "expense", e.id, "${e.description}: مبلغ ${Fmt.money(old.amountMinor)} ← ${Fmt.money(e.amountMinor)} $reason")
     }
 
     /** Voids a draft expense (reverses its journal entry). Payments must be reversed first. */
@@ -140,7 +142,7 @@ class ExpenseRepository(private val r: Repos) {
         if (c.mode == ChargeMode.WATER_TARIFF && c.amountMinor != 0L) fail(OpError.INVALID_INPUT)
         AllocationPolicy.decode(c.policyJson)
         dao.upsertChargeItem(c.copy(name = c.name.trim()))
-        r.journal.audit(c.buildingId, "SAVE_CHARGE_ITEM", "charge_item", c.id, "${c.name} ${c.mode} ${c.amountMinor}")
+        r.journal.audit(c.buildingId, "SAVE_CHARGE_ITEM", "charge_item", c.id, "${c.name}: ${Fa.chargeMode(c.mode)} ${Fmt.money(c.amountMinor)}")
         c.id
     }
 }
@@ -180,6 +182,22 @@ data class BuildingBalances(
 
 class FinanceRepository(private val r: Repos) {
     private val fin get() = r.db.financeDao()
+
+    suspend fun addFund(buildingId: String, name: String, kind: FundKind): String = r.tx {
+        if (name.isBlank() || kind == FundKind.OPERATING) fail(OpError.INVALID_INPUT)
+        val id = newId()
+        fin.upsertFund(com.github.opscalehub.dong.data.db.FundEntity(id, buildingId, name.trim(), kind))
+        r.journal.audit(buildingId, "ADD_FUND", "fund", id, name)
+        id
+    }
+
+    suspend fun addCashAccount(buildingId: String, name: String, kind: com.github.opscalehub.dong.data.db.CashKind): String = r.tx {
+        if (name.isBlank()) fail(OpError.INVALID_INPUT)
+        val id = newId()
+        fin.upsertCashAccount(com.github.opscalehub.dong.data.db.CashAccountEntity(id, buildingId, name.trim(), kind))
+        r.journal.audit(buildingId, "ADD_CASH_ACCOUNT", "cash_account", id, name)
+        id
+    }
 
     suspend fun operatingFundId(buildingId: String): String =
         fin.funds(buildingId).firstOrNull { it.kind == FundKind.OPERATING }?.id ?: fail(OpError.NOT_FOUND, "operating fund")
@@ -300,7 +318,7 @@ class PeriodRepository(private val r: Repos) {
         if (dao.periods(buildingId).any { start <= it.endDate && end >= it.startDate }) fail(OpError.PERIOD_OVERLAP)
         val id = newId()
         dao.insertPeriod(PeriodEntity(id, buildingId, name.trim(), start, end, due, createdAt = r.clock.now()))
-        r.journal.audit(buildingId, "CREATE_PERIOD", "period", id, "$name $start..$end")
+        r.journal.audit(buildingId, "CREATE_PERIOD", "period", id, "$name: ${Fmt.date(start)} تا ${Fmt.date(end)}")
         id
     }
 
@@ -365,7 +383,7 @@ class PeriodRepository(private val r: Repos) {
         )
         val snap = PeriodSnapshot(calculatedAt = r.clock.now(), input = input, result = result)
         dao.updatePeriod(p.copy(status = PeriodStatus.FINALIZED, finalizedAt = r.clock.now(), snapshotJson = snap.encode(), chargeEntryId = entryId))
-        r.journal.audit(p.buildingId, "FINALIZE_PERIOD", "period", p.id, "${p.name}: ${result.lines.size} lines, total ${result.total}")
+        r.journal.audit(p.buildingId, "FINALIZE_PERIOD", "period", p.id, "${p.name}: ${Fmt.number(result.lines.size.toLong())} ردیف شارژ، جمع ${Fmt.money(result.total)}")
         result
     }
 
@@ -414,7 +432,7 @@ class PeriodRepository(private val r: Repos) {
         val snap = PeriodSnapshot(calculatedAt = r.clock.now(), input = prev.input, result = prev.result)
         val id = newId()
         dao.insertRevision(PeriodRevisionEntity(id, periodId, revision, r.clock.now(), reason, snap.encode(), entryId))
-        r.journal.audit(p.buildingId, "CORRECT_PERIOD", "period", p.id, "revision $revision: $reason (${prev.diff.size} lines)")
+        r.journal.audit(p.buildingId, "CORRECT_PERIOD", "period", p.id, "اصلاحیه ${Fmt.number(revision.toLong())}: $reason (${Fmt.number(prev.diff.size.toLong())} ردیف)")
         id
     }
 }

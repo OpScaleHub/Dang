@@ -59,7 +59,7 @@ class ExportBackupTest {
         val expected = Json.parseToJsonElement(listOf("../workbook/expected-results.json", "workbook/expected-results.json").map(::File).first { it.exists() }.readText()).jsonObject
         val bal = r.finance.balances(b)
         assertTrue(bal.reconciles)
-        val units = db.buildingDao().units(b).associateBy { it.label }
+        val units = db.buildingDao().units(b).associateBy { com.github.opscalehub.dong.i18n.Fmt.latin(it.label) }
         expected.getValue("unitClosingBalances").jsonObject.forEach { (label, v) ->
             assertEquals("unit $label", v.jsonPrimitive.long, bal.units.getValue(units.getValue(label).id))
         }

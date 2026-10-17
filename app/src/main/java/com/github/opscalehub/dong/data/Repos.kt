@@ -1,5 +1,8 @@
 package com.github.opscalehub.dong.data
 
+import com.github.opscalehub.dong.domain.allocation.QuantityKind
+import com.github.opscalehub.dong.i18n.Fa
+import com.github.opscalehub.dong.i18n.Fmt
 import androidx.room.withTransaction
 import com.github.opscalehub.dong.data.db.AuditEventEntity
 import com.github.opscalehub.dong.data.db.BuildingEntity
@@ -137,7 +140,7 @@ class BuildingRepository(private val r: Repos) {
         dao.upsertBuilding(b.copy(createdAt = old.createdAt))
         // Finalized periods keep their own settings snapshot; only drafts see the change.
         r.journal.audit(b.id, "UPDATE_SETTINGS", "building", b.id,
-            "rounding ${old.roundingIncrement}→${b.roundingIncrement}, occupancy ${old.occupancyBasis}→${b.occupancyBasis}, calendar ${old.calendar}→${b.calendar}")
+            "گرد کردن ${Fmt.number(old.roundingIncrement)}←${Fmt.number(b.roundingIncrement)}، مبنای ساکنان: ${Fa.occupancyBasis(b.occupancyBasis)}، تقویم: ${Fa.calendar(b.calendar)}")
     }
 
     suspend fun delete(buildingId: String) = r.tx { dao.deleteBuilding(buildingId) }
@@ -149,7 +152,7 @@ class BuildingRepository(private val r: Repos) {
         val existing = dao.unit(u.id)
         dao.upsertUnit(u.copy(label = u.label.trim()))
         r.journal.audit(u.buildingId, if (existing == null) "CREATE_UNIT" else "UPDATE_UNIT", "unit", u.id,
-            "${u.label}: area ${existing?.areaCentiM2}→${u.areaCentiM2}, active ${existing?.active}→${u.active}")
+            "واحد ${u.label}: متراژ ${Fa.quantity(QuantityKind.AREA_CENTI_M2, u.areaCentiM2)}، ${if (u.active) "فعال" else "غیرفعال"}")
         u.id
     }
 
@@ -163,7 +166,7 @@ class BuildingRepository(private val r: Repos) {
         dao.insertOccupancy(OccupancyEntity(id, unitId, effectiveFrom, count, note, r.clock.now()))
         val backdated = r.lastFinalizedEnd(unit.buildingId)?.let { effectiveFrom <= it } == true
         r.journal.audit(unit.buildingId, "SET_OCCUPANCY", "unit", unitId,
-            "${unit.label}: $count from $effectiveFrom" + if (backdated) " (backdated into a finalized period; apply via correction)" else "")
+            "واحد ${unit.label}: ${Fmt.number(count.toLong())} نفر از ${Fmt.date(effectiveFrom)}" + if (backdated) " (تاریخ در دوره قطعی‌شده؛ با اصلاحیه اعمال شود)" else "")
         id
     }
 
@@ -172,7 +175,7 @@ class BuildingRepository(private val r: Repos) {
         val unit = dao.unit(o.unitId) ?: fail(OpError.NOT_FOUND)
         if (r.lastFinalizedEnd(unit.buildingId)?.let { o.effectiveFrom <= it } == true) fail(OpError.LOCKED_BY_FINALIZED_PERIOD)
         dao.deleteOccupancy(id)
-        r.journal.audit(unit.buildingId, "DELETE_OCCUPANCY", "unit", unit.id, "${unit.label}: removed record from ${o.effectiveFrom}")
+        r.journal.audit(unit.buildingId, "DELETE_OCCUPANCY", "unit", unit.id, "واحد ${unit.label}: حذف سابقه از ${Fmt.date(o.effectiveFrom)}")
     }
 
     suspend fun saveSpace(s: ParkingSpaceEntity): String = r.tx {
@@ -191,7 +194,7 @@ class BuildingRepository(private val r: Repos) {
         }
         val id = newId()
         dao.upsertAssignment(ParkingAssignmentEntity(id, spaceId, unitId, relation, inUse, vehicle, from))
-        r.journal.audit(unit.buildingId, "ASSIGN_PARKING", "parking_space", spaceId, "→ ${unit.label} ($relation, inUse=$inUse) from $from")
+        r.journal.audit(unit.buildingId, "ASSIGN_PARKING", "parking_space", spaceId, "به واحد ${unit.label} (${Fa.relation(relation)}، ${if (inUse) "در استفاده" else "بلااستفاده"}) از ${Fmt.date(from)}")
         id
     }
 
@@ -210,7 +213,7 @@ class WaterRepository(private val r: Repos) {
         if (m.role == MeterRole.UNIT && m.unitId == null) fail(OpError.INVALID_INPUT, "unit meter needs a unit")
         if (m.rolloverLimitLiters != null && m.rolloverLimitLiters <= 0) fail(OpError.INVALID_INPUT)
         dao.upsertMeter(m)
-        r.journal.audit(m.buildingId, "SAVE_METER", "meter", m.id, "${m.label} ${m.role}")
+        r.journal.audit(m.buildingId, "SAVE_METER", "meter", m.id, "${m.label} (${Fa.meterRole(m.role)})")
         m.id
     }
 
@@ -221,7 +224,7 @@ class WaterRepository(private val r: Repos) {
         if (r.locked(m.buildingId, date)) fail(OpError.LOCKED_BY_FINALIZED_PERIOD)
         val id = newId()
         dao.insertReading(MeterReadingEntity(id, meterId, date, valueLiters, kind, null, note, r.clock.now()))
-        r.journal.audit(m.buildingId, "ADD_READING", "meter", meterId, "${m.label}: $valueLiters L on $date ($kind)")
+        r.journal.audit(m.buildingId, "ADD_READING", "meter", meterId, "${m.label}: ${Fmt.cubicMeters(valueLiters)} م³ در ${Fmt.date(date)} (${Fa.readingKind(kind)})")
         id
     }
 
@@ -234,7 +237,7 @@ class WaterRepository(private val r: Repos) {
         val m = dao.meter(old.meterId) ?: fail(OpError.NOT_FOUND)
         val id = newId()
         dao.insertReading(old.copy(id = id, valueLiters = newValueLiters, supersedesId = old.id, note = reason, enteredAt = r.clock.now()))
-        r.journal.audit(m.buildingId, "CORRECT_READING", "meter", m.id, "${m.label}: ${old.valueLiters}→$newValueLiters L on ${old.readingDate}: $reason")
+        r.journal.audit(m.buildingId, "CORRECT_READING", "meter", m.id, "${m.label}: ${Fmt.cubicMeters(old.valueLiters)} ← ${Fmt.cubicMeters(newValueLiters)} م³ (${Fmt.date(old.readingDate)}): $reason")
         id
     }
 
@@ -244,7 +247,7 @@ class WaterRepository(private val r: Repos) {
         if (r.lastFinalizedEnd(m.buildingId)?.let { rd.readingDate <= it } == true) fail(OpError.LOCKED_BY_FINALIZED_PERIOD)
         if (dao.supersededCount(readingId) > 0) fail(OpError.LOCKED_BY_FINALIZED_PERIOD)
         dao.deleteReading(readingId)
-        r.journal.audit(m.buildingId, "DELETE_READING", "meter", m.id, "${m.label}: ${rd.valueLiters} L on ${rd.readingDate}")
+        r.journal.audit(m.buildingId, "DELETE_READING", "meter", m.id, "${m.label}: حذف قرائت ${Fmt.cubicMeters(rd.valueLiters)} م³ (${Fmt.date(rd.readingDate)})")
     }
 
     /** Replaces a meter: FINAL reading on the old one, a new meter with an INITIAL reading, same unit. */
@@ -256,14 +259,14 @@ class WaterRepository(private val r: Repos) {
         val newId = newId()
         dao.upsertMeter(MeterEntity(newId, old.buildingId, old.unitId, old.role, newLabel.ifBlank { old.label }, newSerial, old.rolloverLimitLiters, date, null, old.id))
         addReading(newId, date, initialValueLiters, ReadingKind.INITIAL, "قرائت اولیه کنتور جدید")
-        r.journal.audit(old.buildingId, "REPLACE_METER", "meter", old.id, "${old.label} → $newLabel on $date")
+        r.journal.audit(old.buildingId, "REPLACE_METER", "meter", old.id, "${old.label} ← $newLabel در ${Fmt.date(date)}")
         newId
     }
 
     suspend fun saveTariff(t: WaterTariffEntity): String = r.tx {
         if (!TariffCalculator.validate(t.toDomain())) fail(OpError.INVALID_INPUT, "tariff")
         dao.upsertTariff(t)
-        r.journal.audit(t.buildingId, "SAVE_TARIFF", "water_tariff", t.id, "${t.name} from ${t.effectiveFrom}")
+        r.journal.audit(t.buildingId, "SAVE_TARIFF", "water_tariff", t.id, "${t.name} از ${Fmt.date(t.effectiveFrom)}")
         t.id
     }
 

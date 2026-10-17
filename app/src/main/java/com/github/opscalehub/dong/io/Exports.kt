@@ -221,10 +221,10 @@ object StatementRenderer {
                 if (d.building.address.isNotBlank()) append("<div class=\"muted\">").append(esc(d.building.address)).append("</div>")
                 append("<h2>صورتحساب واحد ").append(esc(u.label)).append(" — ").append(esc(period.name)).append("</h2>")
                 append("<div class=\"meta\">از ").append(Fmt.longDate(period.startDate, cal)).append(" تا ").append(Fmt.longDate(period.endDate, cal))
-                period.dueDate?.let { append(" · مهلت پرداخت: ").append(Fmt.longDate(it, cal)) }
-                append(" · وضعیت دوره: ").append(if (period.status == PeriodStatus.FINALIZED) "قطعی" else "<b class=\"warn\">پیش‌نویس (قابل تغییر)</b>")
+                period.dueDate?.let { append("، مهلت پرداخت: ").append(Fmt.longDate(it, cal)) }
+                append("، وضعیت دوره: ").append(if (period.status == PeriodStatus.FINALIZED) "قطعی" else "<b class=\"warn\">پیش‌نویس (قابل تغییر)</b>")
                 append("</div><div class=\"meta\">متراژ: ").append(Fa.quantity(QuantityKind.AREA_CENTI_M2, u.areaCentiM2))
-                append(" · مبالغ به ").append(cur).append("</div></header>")
+                append("، مبالغ به ").append(cur).append("</div></header>")
 
                 append("<table><thead><tr><th>شرح</th><th>مبنای محاسبه و سهم این واحد</th><th class=\"num\">مبلغ</th></tr></thead><tbody>")
                 var periodCharges = 0L
@@ -232,7 +232,7 @@ object StatementRenderer {
                     val share = src.allocation.shares[uid] ?: 0L
                     if (share == 0L && src.allocation.components.none { c -> c.units.any { it.unitId == uid } }) return@forEach
                     periodCharges += share
-                    append("<tr><td>").append(esc(src.name)).append("<div class=\"muted\">").append(esc(d.categoryName(src.categoryId))).append(" · ")
+                    append("<tr><td>").append(esc(src.name)).append("<div class=\"muted\">").append(esc(d.categoryName(src.categoryId))).append("، ")
                         .append(esc(d.fundName(src.fundId))).append("</div></td><td>")
                     src.allocation.components.forEach { c ->
                         val us = c.units.firstOrNull { it.unitId == uid } ?: return@forEach

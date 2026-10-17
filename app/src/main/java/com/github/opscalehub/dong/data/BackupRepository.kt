@@ -1,5 +1,7 @@
 package com.github.opscalehub.dong.data
 
+import com.github.opscalehub.dong.i18n.Fa
+import com.github.opscalehub.dong.i18n.Fmt
 import com.github.opscalehub.dong.data.db.DongDatabase
 import com.github.opscalehub.dong.io.BackupCodec
 import com.github.opscalehub.dong.io.BackupException
@@ -160,7 +162,7 @@ class BackupRepository(private val r: Repos, private val appVersion: String) {
             inserted += rd.lines(b.lines).count()
             inserted += rd.audit(b.audit).count()
             r.journal.audit(b.building.id, "RESTORE_${modes[b.building.id]}", "building", b.building.id,
-                "backup ${preview.header.appVersion} @${preview.header.createdAt}")
+                "بازیابی از پشتیبان نسخه ${preview.header.appVersion}")
         }
         // Merging can never unbalance the ledger (entries and their lines travel together), but verify anyway.
         for (b in preview.payload.buildings) {
