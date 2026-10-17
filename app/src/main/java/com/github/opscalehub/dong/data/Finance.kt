@@ -129,6 +129,7 @@ class ExpenseRepository(private val r: Repos) {
         val e = expenseId?.let { dao.expense(it) ?: fail(OpError.NOT_FOUND) }
         if (e != null) {
             if (e.status != ExpenseStatus.ACTIVE) fail(OpError.INVALID_INPUT, "voided")
+            if (e.amountMinor <= 0) fail(OpError.INVALID_AMOUNT, "credit note")
             if (paid(e.id) + amount > e.amountMinor) fail(OpError.INVALID_AMOUNT, "overpayment")
         }
         val b = e?.buildingId ?: buildingId ?: fail(OpError.INVALID_INPUT)
@@ -407,8 +408,12 @@ class PeriodRepository(private val r: Repos) {
         if (p.status != PeriodStatus.FINALIZED) fail(OpError.PERIOD_NOT_FINALIZED)
         val original = PeriodSnapshot.decode(p.snapshotJson!!).input
         val current = buildInput(periodId)
+        // Unit membership and active flags come from the snapshot: deactivating a unit later, or adding
+        // a new one, must not move charges of an already-finalized period. Areas may be corrected.
+        val snapUnits = original.units.associateBy { it.id }
+        val units = current.units.mapNotNull { u -> snapUnits[u.id]?.let { s -> u.copy(active = s.active) } }
         val input = original.copy(
-            units = current.units, occupancy = current.occupancy, spaces = current.spaces,
+            units = units, occupancy = current.occupancy, spaces = current.spaces,
             assignments = current.assignments, meters = current.meters, readings = current.readings,
         )
         val result = PeriodCalculator.calculate(input)

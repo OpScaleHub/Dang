@@ -16,6 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.github.opscalehub.dong.data.OpException
 import com.github.opscalehub.dong.ui.AppViewModel
@@ -29,6 +31,12 @@ fun <T> derived(vm: AppViewModel, vararg keys: Any?, block: suspend () -> T): St
             block()
         } catch (e: OpException) {
             null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Degrade instead of crashing the screen; log the type only (no resident data).
+            android.util.Log.w("Dong", "derived failed: ${e.javaClass.simpleName}")
+            null
         }
     }
 }
@@ -41,7 +49,9 @@ fun WithFab(label: String?, onClick: () -> Unit, content: @Composable BoxScope.(
         if (label != null) {
             ExtendedFloatingActionButton(
                 onClick = onClick, icon = { Icon(Icons.Filled.Add, null) }, text = { Text(label) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+                // The extended FAB does not expose its label to accessibility services; set it explicitly
+                // so TalkBack announces e.g. «هزینه جدید» instead of an unlabeled button.
+                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).semantics { contentDescription = label },
             )
         }
     }

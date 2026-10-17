@@ -186,7 +186,7 @@ fun PeriodScreen(vm: AppViewModel, nav: NavController, periodId: String) {
                                     }
                                 }
                             }
-                            Hint("* ${S.roundingHint}")
+                            Hint(S.roundingFootnote)
                         }
                     }
                 }

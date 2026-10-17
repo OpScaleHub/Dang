@@ -17,6 +17,8 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Persian-only UI: drop the ~90 locales of library strings.
+        resourceConfigurations += listOf("fa")
     }
 
     buildTypes {
@@ -83,4 +85,10 @@ dependencies {
     testImplementation(libs.androidx.test.junit)
     testImplementation(libs.androidx.room.testing)
     testImplementation(libs.kotlinx.coroutines.test)
+
+    androidTestImplementation(platform(libs.androidx.compose.bom))
+    androidTestImplementation(libs.androidx.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
+    debugImplementation(libs.androidx.ui.test.manifest)
 }

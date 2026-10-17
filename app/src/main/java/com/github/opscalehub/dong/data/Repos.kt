@@ -222,8 +222,13 @@ class WaterRepository(private val r: Repos) {
         val m = dao.meter(meterId) ?: fail(OpError.NOT_FOUND)
         if (valueLiters < 0) fail(OpError.INVALID_AMOUNT)
         if (r.locked(m.buildingId, date)) fail(OpError.LOCKED_BY_FINALIZED_PERIOD)
+        // A meter's first reading is its baseline (INITIAL), and its install date follows its earliest
+        // reading — so a new meter neither blocks its first period nor appears in earlier ones.
+        val earlier = dao.readings(m.buildingId).any { it.meterId == meterId && it.readingDate <= date }
+        val effectiveKind = if (!earlier && kind == ReadingKind.REGULAR) ReadingKind.INITIAL else kind
+        if (m.installedOn == null || date < m.installedOn) dao.upsertMeter(m.copy(installedOn = date))
         val id = newId()
-        dao.insertReading(MeterReadingEntity(id, meterId, date, valueLiters, kind, null, note, r.clock.now()))
+        dao.insertReading(MeterReadingEntity(id, meterId, date, valueLiters, effectiveKind, null, note, r.clock.now()))
         r.journal.audit(m.buildingId, "ADD_READING", "meter", meterId, "${m.label}: ${Fmt.cubicMeters(valueLiters)} م³ در ${Fmt.date(date)} (${Fa.readingKind(kind)})")
         id
     }

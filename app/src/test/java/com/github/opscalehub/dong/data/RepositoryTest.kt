@@ -258,4 +258,43 @@ class RepositoryTest {
         assertEquals(60L, unit12.quantity) // 15×1 + 15×3 occupant-days
         assertFalse(r.blockingIssues.isNotEmpty())
     }
+
+    @Test
+    fun `audit - deactivating a unit later does not change a finalized period on correction`() = runBlocking {
+        val w = world().setup()
+        val p = w.r.periods.create(w.b, "مهر", w.start, w.end)
+        w.r.expenses.create(w.expense("هزینه‌های اداری", 900_000, p, AllocationPolicy.single(Basis.Equal)))
+        w.r.periods.finalize(p)
+        w.r.buildings.saveUnit(w.unit("4-2").copy(active = false))
+        w.r.buildings.saveUnit(UnitEntity(newId(), w.b, 5, "5-1", 10_000, sortOrder = 10))
+        assertTrue(w.r.periods.previewCorrection(p).diff.isEmpty())
+    }
+
+    @Test
+    fun `audit - a new meter's first reading is its baseline and it is invisible to earlier periods`() = runBlocking {
+        val w = world().setup()
+        val p1 = w.r.periods.create(w.b, "مهر", w.start, w.end)
+        w.r.periods.finalize(p1)
+        val p2 = w.r.periods.create(w.b, "آبان", w.end + 1, w.end + 30)
+        val m = w.r.water.saveMeter(com.github.opscalehub.dong.data.db.MeterEntity(newId(), w.b, w.units[0].id, com.github.opscalehub.dong.domain.model.MeterRole.UNIT, "جدید"))
+        w.r.water.addReading(m, w.end + 2, 500) // user leaves the kind as REGULAR
+        w.r.water.addReading(m, w.end + 30, 3_500)
+        val first = w.db.waterDao().readings(w.b).first { it.meterId == m && it.readingDate == w.end + 2 }
+        assertEquals(com.github.opscalehub.dong.domain.model.ReadingKind.INITIAL, first.kind)
+        assertEquals(w.end + 2, w.db.waterDao().meter(m)!!.installedOn)
+        val r2 = w.r.periods.preview(p2)
+        assertTrue(r2.issues.none { it.meterId == m && it.blocking })
+        assertEquals(3_000L, r2.water.unitLiters[w.units[0].id])
+        // the earlier, finalized period can still be corrected (meter did not exist then)
+        assertTrue(w.r.periods.previewCorrection(p1).result.canFinalize)
+    }
+
+    @Test
+    fun `audit - credit notes cannot be paid to the supplier`() = runBlocking {
+        val w = world().setup()
+        val e = w.expense("هزینه‌های اداری", -200_000, null)
+        w.r.expenses.create(e)
+        expectError(OpError.INVALID_AMOUNT) { w.r.expenses.paySupplier(e.id, 100_000, w.cash, w.start) }
+        assertTrue(w.r.finance.balances(w.b).reconciles)
+    }
 }

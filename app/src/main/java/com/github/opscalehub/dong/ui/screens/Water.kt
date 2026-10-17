@@ -173,6 +173,9 @@ fun MeterScreen(vm: AppViewModel, meterId: String) {
     val meter = meters.firstOrNull { it.id == meterId } ?: return
     val mine = readings.filter { it.meterId == meterId }.sortedWith(compareByDescending<MeterReadingEntity> { it.readingDate }.thenByDescending { it.enteredAt })
     val superseded = readings.mapNotNull { it.supersedesId }.toSet()
+    val periods by vm.periods.collectAsState()
+    // Readings up to the last finalized period's end can only be corrected, never deleted.
+    val lockedUntil = periods.filter { it.status == com.github.opscalehub.dong.data.db.PeriodStatus.FINALIZED }.maxOfOrNull { it.endDate }
     var adding by remember { mutableStateOf(false) }
     var correcting by remember { mutableStateOf<MeterReadingEntity?>(null) }
     var replacing by remember { mutableStateOf(false) }
@@ -203,7 +206,9 @@ fun MeterScreen(vm: AppViewModel, meterId: String) {
                         if (!isSuperseded) {
                             Column {
                                 TextButton(onClick = { correcting = r }) { Text(S.correctReading) }
-                                TextButton(onClick = { vm.run(S.done) { vm.repos.water.deleteReading(r.id) } }) { Text(S.delete) }
+                                if (lockedUntil == null || r.readingDate > lockedUntil) {
+                                    TextButton(onClick = { vm.run(S.done) { vm.repos.water.deleteReading(r.id) } }) { Text(S.delete) }
+                                }
                             }
                         }
                     }

@@ -247,6 +247,7 @@ object S {
     const val revisions = "اصلاحیه‌های ثبت‌شده"
     const val deleteDraft = "حذف دوره پیش‌نویس"
     const val fundBorne = "از محل صندوق"
+    const val roundingFootnote = "* این سهم شامل تعدیل گرد کردن است: باقیمانده گرد کردن حذف نمی‌شود و به واحدهای دارای بزرگ‌ترین باقیمانده داده می‌شود تا جمع سهم‌ها دقیقاً برابر مبلغ باشد."
     const val snapshotNote = "نمایش از روی نسخه ثابت‌شده هنگام قطعی شدن."
     const val waterOfPeriod = "آب این دوره"
     const val exportStatement = "خروجی صورتحساب (HTML)"

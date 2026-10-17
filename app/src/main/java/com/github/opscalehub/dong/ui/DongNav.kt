@@ -172,7 +172,8 @@ fun DongRoot(vm: AppViewModel = viewModel()) {
         ) { pad ->
             Column(Modifier.padding(pad).fillMaxSize()) {
                 if (buildings.isEmpty() || building == null) {
-                    BuildingsScreen(vm, onOpened = { nav.navigate(Routes.DASHBOARD) { popUpTo(0) } })
+                    // Outside the NavHost: the root switches to the dashboard by itself once a building exists.
+                    BuildingsScreen(vm, onOpened = {})
                 } else {
                     DongNavHost(nav, vm)
                 }

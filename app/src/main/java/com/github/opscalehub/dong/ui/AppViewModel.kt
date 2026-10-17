@@ -119,19 +119,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun run(success: String? = null, onSuccess: () -> Unit = {}, block: suspend () -> Unit) {
         viewModelScope.launch {
             _busy.value = true
-            try {
+            val ok = try {
                 block()
-                success?.let { _messages.emit(it) }
-                onSuccess()
+                true
             } catch (e: OpException) {
                 Log.i("Dong", "action rejected: ${e.code}")
                 _messages.emit(Fa.error(e.code))
+                false
             } catch (e: Exception) {
                 // Log the type only: messages may contain resident data.
                 Log.w("Dong", "action failed: ${e.javaClass.simpleName}")
                 _messages.emit(S.unexpectedError)
+                false
             } finally {
                 _busy.value = false
+            }
+            // Outside the try: a UI callback failing must never be reported as a failed (rolled back) operation.
+            if (ok) {
+                success?.let { _messages.emit(it) }
+                onSuccess()
             }
         }
     }
