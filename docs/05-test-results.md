@@ -54,6 +54,25 @@ negative meter reading (both detected).
 | Install and launch on a physical OnePlus Nord over Wi-Fi debugging | OK |
 | APK permissions (`aapt2 dump permissions`) | no INTERNET; only AndroidX's private receiver permission |
 
+## On-device pass — OnePlus Nord (AC2003), dark mode, over Wi-Fi debugging
+
+Non-destructive: a second demo building was added next to the existing one;
+nothing else on the phone was touched.
+
+| Step (all through the UI) | Result |
+|---|---|
+| Install over Wi-Fi (`adb install -r`, data kept), launch | OK, no entries in the crash log for the whole session |
+| New demo building, dashboard | equals workbook: debts 21,470,000, credits 70,000, cash 69,000,000, reserve 51,000,000, ledger reconciles |
+| Closing readings for 10 meters | main 158 m³, units 120.4 m³, unexplained 37.6 m³ |
+| Correct a reading with a reason (335 → 336) | original kept struck through; unexplained 36.6 m³; locked readings show no delete |
+| Preview → finalize with confirmation | finalized, snapshot note shown |
+| Payment 1,000,000 (grouped echo «۱٬۰۰۰٬۰۰۰» shown) | unit 1-1: 3,594,000 → 2,594,000 |
+| Reverse the payment with a reason | original marked «برگشت‌خورده», balance back to 3,594,000 |
+| Force-stop and relaunch | all data and balances unchanged |
+| XLSX export via system file picker; evaluated on the computer | debits = credits = 289,900,000; reconciliation formula = 0 |
+| Backup via file picker; verified on the computer | SHA-256 matches; both buildings: 0 unbalanced entries, trial balance 0 |
+| Restore preview of that backup (cancelled) | both buildings «قبلاً کامل وارد شده»: 401 / 470 records, 0 new, 0 differing |
+
 ## Defects found by these tests and fixed
 
 1. Workbook explicit-amount check used `N()` on a range (only first cell).
