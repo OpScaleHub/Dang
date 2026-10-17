@@ -127,7 +127,7 @@ class EndToEndTest {
         clickLast("بعدی")
         type("تعداد طبقات", "1")
         type("واحد در هر طبقه", "2")
-        clickLast("ساخت خودکار")
+        clickLast("ساختن فهرست واحدها")
         clickLast("بعدی")
         clickLast("پایان")
         waitFor("این ماه")

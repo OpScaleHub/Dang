@@ -408,6 +408,8 @@ object S {
     const val finish = "پایان"
     const val skip = "رد شدن"
     const val generateUnits = "ساخت خودکار"
+    const val generateUnitsButton = "ساختن فهرست واحدها"
+    const val addExpensesFirst = "اول هزینه‌های این ماه را ثبت کنید."
     const val floorsCount = "تعداد طبقات"
     const val unitsPerFloor = "واحد در هر طبقه"
     const val addRow = "افزودن واحد"

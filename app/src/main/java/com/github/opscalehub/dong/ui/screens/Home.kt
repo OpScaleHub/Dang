@@ -95,6 +95,7 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
                     add(StepState(S.stepReview, when {
                         finalized -> S.monthDone
                         blocking > 0 -> "${Fmt.number(blocking.toLong())} ${S.blockingIssues}"
+                        (preview?.total ?: 0L) == 0L -> S.addExpensesFirst // closing an empty month is pointless
                         else -> S.noIssues
                     }, finalized, true) { nav.navigate(Routes.period(current.id)) })
                     add(StepState(S.stepSend, if (finalized) S.tapToOpen else S.afterClosing, false, finalized) { nav.navigate(Routes.UNITS) })

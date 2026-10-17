@@ -23,6 +23,19 @@
 - Chart palette validated with the dataviz checker against the app's card
   surfaces (categorical adjacent CVD ΔE ≥ 8.4; aging ramp light end ≥ 2:1).
 
+### On the phone (OnePlus Nord, dark mode, Wi‑Fi debugging)
+
+- Upgrade over an existing install: schema migrated v2→v3 on real data, app
+  opened without crashes, building intact.
+- Clean install (uninstall/reinstall), setup wizard through the UI: two
+  floors × two units generated, opening cash 5,000,000 Toman → home shows the
+  month, a 4-step checklist (no meters, so no readings step) and the opening
+  entry; demo building added alongside.
+- Found and fixed on the device: wizard heading and button had the same label;
+  Latin digits in the wizard's unit table; the review step said "ready to
+  close" for an empty month; creating the demo from the buildings screen did
+  not return home; the display-currency switch was missing from Settings.
+
 ## Release 0.1.0
 
 

@@ -179,6 +179,8 @@ private fun BuildingSettingsCard(vm: AppViewModel) {
     val rounding = rememberCount(building.roundingIncrement)
     var occ by remember(building.id) { mutableStateOf(building.occupancyBasis) }
     var cal by remember(building.id) { mutableStateOf(building.calendar) }
+    // Display only: amounts stay stored exactly; Toman = Rial ÷ 10.
+    var toman by remember(building.id) { mutableStateOf(building.displayDivisor == 10L) }
     SectionCard(S.buildingSettings, subtitle = S.settingsNote) {
         TextInput(S.buildingName, name, { name = it })
         TextInput(S.address, address, { address = it })
@@ -186,6 +188,8 @@ private fun BuildingSettingsCard(vm: AppViewModel) {
         TextInput(S.currencyName, currencyName, { currencyName = it })
         NumberInput(S.minorDigits, digits)
         NumberInput(S.roundingIncrement, rounding, supporting = S.roundingHint)
+        Text(S.displayCurrency, style = MaterialTheme.typography.labelMedium)
+        SingleChoice(listOf(true, false), toman, { toman = it }) { if (it) S.showToman else S.showRial }
         Text(S.occupancyBasis, style = MaterialTheme.typography.labelMedium)
         SingleChoice(OccupancyBasis.entries, occ, { occ = it }) { Fa.occupancyBasis(it) }
         Text(S.calendar, style = MaterialTheme.typography.labelMedium)
@@ -193,7 +197,8 @@ private fun BuildingSettingsCard(vm: AppViewModel) {
         Button(onClick = {
             vm.run(S.saved) {
                 vm.repos.buildings.updateSettings(building.copy(name = name.trim(), address = address.trim(), currencyCode = currencyCode.trim(),
-                    currencyName = currencyName.trim(), minorDigits = digits.value!!.toInt(), roundingIncrement = rounding.value!!, occupancyBasis = occ, calendar = cal))
+                    currencyName = currencyName.trim(), minorDigits = digits.value!!.toInt(), roundingIncrement = rounding.value!!, occupancyBasis = occ, calendar = cal,
+                    displayCurrencyName = if (toman) S.showToman else "", displayDivisor = if (toman) 10 else 1))
             }
         }, enabled = name.isNotBlank() && digits.valid && (digits.value ?: -1) in 0..4 && (rounding.value ?: 0) >= 1) { Text(S.save) }
     }

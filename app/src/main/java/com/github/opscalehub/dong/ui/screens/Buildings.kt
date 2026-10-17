@@ -44,6 +44,7 @@ import com.github.opscalehub.dong.ui.FormDialog
 import com.github.opscalehub.dong.ui.Hint
 import com.github.opscalehub.dong.ui.NumberFieldState
 import com.github.opscalehub.dong.ui.NumberInput
+import com.github.opscalehub.dong.ui.PersianDigitsTransformation
 import com.github.opscalehub.dong.ui.Routes
 import com.github.opscalehub.dong.ui.S
 import com.github.opscalehub.dong.ui.ScreenList
@@ -54,7 +55,7 @@ import com.github.opscalehub.dong.ui.UnitChip
 import com.github.opscalehub.dong.ui.rememberCount
 
 /** Creates the synthetic demo building in one transaction and selects it. */
-fun loadDemo(vm: AppViewModel) = vm.run(S.sampleCreated) {
+fun loadDemo(vm: AppViewModel, onDone: () -> Unit = {}) = vm.run(S.sampleCreated, onSuccess = onDone) {
     val id = vm.repos.tx { SampleData.createBuilding(vm.repos, "ساختمان نمایشی (ساختگی)").also { SampleData.addDemoData(vm.repos, it) } }
     vm.select(id)
 }
@@ -136,7 +137,7 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
                                 for (f in 1..(floors.value ?: 0).toInt().coerceIn(0, 60)) for (u in 1..(perFloor.value ?: 0).toInt().coerceIn(0, 20)) {
                                     rows += UnitRow(Fmt.digits("$f-$u"), f.toString(), "100", "2")
                                 }
-                            }) { Text(S.generateUnits) }
+                            }) { Text(S.generateUnitsButton) }
                             Hint(S.unitsHint)
                         }
                     }
@@ -172,9 +173,9 @@ private fun UnitRowEditor(r: UnitRow, onChange: (UnitRow) -> Unit, onRemove: () 
     val num = KeyboardOptions(keyboardType = KeyboardType.Decimal)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OutlinedTextField(r.label, { onChange(r.copy(label = it)) }, Modifier.weight(1.1f), label = { Text(S.unit) }, singleLine = true, isError = r.label.isBlank())
-        OutlinedTextField(r.floor, { onChange(r.copy(floor = it)) }, Modifier.weight(0.8f), label = { Text(S.floor) }, singleLine = true, keyboardOptions = num)
-        OutlinedTextField(r.area, { onChange(r.copy(area = it)) }, Modifier.weight(1f), label = { Text(S.areaShort) }, singleLine = true, keyboardOptions = num)
-        OutlinedTextField(r.occupants, { onChange(r.copy(occupants = it)) }, Modifier.weight(0.8f), label = { Text(S.people) }, singleLine = true, keyboardOptions = num)
+        OutlinedTextField(r.floor, { onChange(r.copy(floor = it)) }, Modifier.weight(0.8f), label = { Text(S.floor) }, singleLine = true, keyboardOptions = num, visualTransformation = PersianDigitsTransformation)
+        OutlinedTextField(r.area, { onChange(r.copy(area = it)) }, Modifier.weight(1f), label = { Text(S.areaShort) }, singleLine = true, keyboardOptions = num, visualTransformation = PersianDigitsTransformation)
+        OutlinedTextField(r.occupants, { onChange(r.copy(occupants = it)) }, Modifier.weight(0.8f), label = { Text(S.people) }, singleLine = true, keyboardOptions = num, visualTransformation = PersianDigitsTransformation)
         TextButton(onClick = onRemove, modifier = Modifier.width(48.dp)) { Text("✕") }
     }
 }
@@ -189,7 +190,7 @@ fun BuildingsScreen(vm: AppViewModel, nav: NavController) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { nav.navigate(Routes.SETUP) }, Modifier.fillMaxWidth()) { Text(S.setupTitle) }
-                OutlinedButton(onClick = { loadDemo(vm) }, Modifier.fillMaxWidth()) { Text(S.createSampleDemo) }
+                OutlinedButton(onClick = { loadDemo(vm) { nav.popBackStack() } }, Modifier.fillMaxWidth()) { Text(S.createSampleDemo) }
             }
         }
         items(buildings.size) { i ->
