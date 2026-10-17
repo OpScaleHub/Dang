@@ -35,6 +35,11 @@
   Latin digits in the wizard's unit table; the review step said "ready to
   close" for an empty month; creating the demo from the buildings screen did
   not return home; the display-currency switch was missing from Settings.
+- Final phone pass (latest build, dark mode): home checklist and tiles,
+  reports (collection ring, expenses by category, 12-month trend opening on
+  the latest month with data, reserve trend, water per unit) and bill sharing
+  (bill image rendered on the device, ASCII file name, share sheet opened) —
+  all correct, no crashes in the session.
 
 ## Release 0.1.0
 
