@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.jetbrains.kotlin.android)
@@ -5,6 +7,15 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
+
+// Version lives in /version.properties so scripts/release.sh can bump it.
+val versionProps = Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
+
+// Release signing key stays outside the repo. Point DONG_SIGNING at a properties file with
+// storeFile, storePassword, keyAlias, keyPassword (default: ~/.config/dong/signing.properties).
+val signingProps = (System.getenv("DONG_SIGNING") ?: "${System.getProperty("user.home")}/.config/dong/signing.properties")
+    .let(::file).takeIf { it.exists() }
+    ?.let { f -> Properties().apply { f.inputStream().use { load(it) } } }
 
 android {
     namespace = "com.github.opscalehub.dong"
@@ -14,15 +25,24 @@ android {
         applicationId = "com.github.opscalehub.dong"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = versionProps.getProperty("VERSION_CODE").toInt()
+        versionName = versionProps.getProperty("VERSION_NAME")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Persian-only UI: drop the ~90 locales of library strings.
         resourceConfigurations += listOf("fa")
     }
 
+    signingConfigs {
+        if (signingProps != null) create("release") {
+            storeFile = file(signingProps.getProperty("storeFile"))
+            storePassword = signingProps.getProperty("storePassword")
+            keyAlias = signingProps.getProperty("keyAlias")
+            keyPassword = signingProps.getProperty("keyPassword")
+        }
+    }
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

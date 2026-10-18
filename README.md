@@ -126,3 +126,24 @@ All sample data in this repository is synthetic.
 
 Font: [Vazirmatn](https://github.com/rastikerdar/vazirmatn), SIL Open Font
 License 1.1 (see `licenses/Vazirmatn-OFL.txt`).
+
+## Landing page and releases
+
+- Landing page: <https://opscalehub.github.io/Dong/> (static files in `site/`,
+  deployed by `.github/workflows/pages.yml` on every push to `main` that touches `site/`).
+- Releases are cut locally, no CI build:
+
+  ```bash
+  scripts/release.sh            # patch bump: 0.2.0 -> 0.2.1
+  scripts/release.sh minor      # or major, or an explicit 1.0.0
+  scripts/release.sh --dry-run  # build and show notes, change nothing
+  ```
+
+  The script bumps `version.properties`, runs the unit tests, builds a signed
+  release APK, writes `site/release.json` (version, size, SHA-256, Jalali date),
+  commits and tags `vX.Y.Z`, pushes, and publishes a GitHub Release with
+  `dong.apk` attached. The landing page's download button always points at
+  `releases/latest/download/dong.apk`.
+- The signing key is created on the first run in `~/.config/dong/`
+  (override with `DONG_SIGNING=/path/to/signing.properties`). **Back it up**:
+  without it, later versions cannot update installed copies.

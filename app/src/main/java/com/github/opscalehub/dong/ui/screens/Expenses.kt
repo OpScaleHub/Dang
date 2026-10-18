@@ -222,7 +222,9 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
                     amt == null || amt == 0L -> Hint(S.previewNeedsAmount)
                     pol?.fundOnly == true -> Hint(S.fundOnly)
                     pv == null -> Hint(S.empty)
-                    !pv.valid -> pv.issues.filter { it.blocking }.forEach { Hint(Fa.issue(it, vm.names()), MaterialTheme.colorScheme.error) }
+                    // The preview runs under an internal source id; drop it so messages don't show «preview».
+                    !pv.valid -> pv.issues.filter { it.blocking }.distinctBy { it.copy(sourceId = null) }
+                        .forEach { Hint(Fa.issue(it.copy(sourceId = null), vm.names()), MaterialTheme.colorScheme.error) }
                     else -> com.github.opscalehub.dong.ui.charts.HBars(
                         units.filter { it.id in pv.shares }.map { u -> com.github.opscalehub.dong.ui.charts.HBar("${S.unit} ${u.label}", pv.shares.getValue(u.id), money(pv.shares.getValue(u.id))) },
                     )

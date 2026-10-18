@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>دنگ — حسابداری و مدیریت ساختمان، بدون اینترنت</title>
+<meta name="description" content="دنگ سهم هر واحد از هزینه‌های ساختمان را دقیق و شفاف حساب می‌کند: شارژ، آب با کنتور، پارکینگ، اندوخته، قبض تصویری و گزارش‌های نموداری. کاملاً آفلاین، بدون ثبت‌نام و بدون تبلیغ.">
+<meta name="theme-color" content="#07110F">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fa_IR">
+<meta property="og:title" content="دنگ — سهم هر واحد، دقیق و شفاف">
+<meta property="og:description" content="حسابداری ساختمان برای اندروید: تقسیم هوشمند هزینه‌ها، آب با کنتور، قبض تصویری و گزارش‌های نموداری. کاملاً آفلاین.">
+<meta property="og:image" content="https://opscalehub.github.io/Dong/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#07110F; --ink-2:#0B1916; --panel:#0F201C; --panel-2:#132824;
+  --line:rgba(230,201,138,.16); --line-2:rgba(243,238,227,.08);
+  --cream:#F3EEE3; --muted:#A9B5B0; --dim:#7E8B86;
+  --teal:#0E5E54; --teal-2:#1C8A7A; --mint:#80CBC4;
+  --gold:#E6C98A; --gold-2:#C9A45C; --gold-3:#9C7B3C;
+  --rose:#E66767;
+  --r:22px; --r-sm:14px;
+  --shadow:0 30px 80px -30px rgba(0,0,0,.65);
+  --maxw:1180px;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{animation:none!important;transition:none!important}}
+body{margin:0;background:var(--ink);color:var(--cream);font-family:Vazirmatn,Tahoma,system-ui,sans-serif;line-height:1.85;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+img{max-width:100%;display:block}
+a{color:inherit}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 20px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:8px}
+
+/* ambient background */
+.aura{position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+   radial-gradient(900px 600px at 85% -10%, rgba(28,138,122,.28), transparent 60%),
+   radial-gradient(700px 500px at 0% 20%, rgba(201,164,92,.14), transparent 60%),
+   radial-gradient(900px 700px at 50% 120%, rgba(14,94,84,.25), transparent 60%),
+   var(--ink)}
+.aura::after{content:"";position:absolute;inset:0;opacity:.35;
+  background-image:linear-gradient(var(--line-2) 1px,transparent 1px),linear-gradient(90deg,var(--line-2) 1px,transparent 1px);
+  background-size:64px 64px;mask-image:radial-gradient(ellipse at 50% 0%,#000 20%,transparent 70%)}
+
+/* nav */
+.nav{position:sticky;top:0;z-index:20;backdrop-filter:saturate(140%) blur(14px);background:rgba(7,17,15,.62);border-bottom:1px solid var(--line-2)}
+.nav .wrap{display:flex;align-items:center;gap:22px;height:68px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;font-size:1.35rem;letter-spacing:-.01em}
+.brand img{width:34px;height:34px}
+.nav ul{display:flex;gap:22px;margin:0 auto 0 0;padding:0;list-style:none}
+.nav ul a{color:var(--muted);text-decoration:none;font-size:.95rem;transition:color .2s}
+.nav ul a:hover{color:var(--cream)}
+@media (max-width:860px){.nav ul{display:none}}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:10px;padding:13px 22px;border-radius:999px;font-weight:700;text-decoration:none;font-size:1rem;transition:transform .2s,box-shadow .2s,background .2s;white-space:nowrap}
+.btn:hover{transform:translateY(-2px)}
+.btn-gold{color:#1A1407;background:linear-gradient(135deg,#F1DBA6 0%,var(--gold) 35%,var(--gold-2) 100%);box-shadow:0 10px 30px -10px rgba(230,201,138,.55),inset 0 1px 0 rgba(255,255,255,.5)}
+.btn-ghost{color:var(--cream);border:1px solid var(--line);background:rgba(243,238,227,.03)}
+.btn-ghost:hover{border-color:var(--gold-2)}
+.btn svg{width:18px;height:18px}
+.nav .btn{padding:9px 16px;font-size:.92rem}
+
+/* hero */
+.hero{padding:72px 0 40px}
+.hero .wrap{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+@media (max-width:960px){.hero .wrap{grid-template-columns:1fr;text-align:center}.hero .cta,.hero .chips{justify-content:center}}
+.eyebrow{display:inline-flex;align-items:center;gap:10px;padding:6px 14px;border:1px solid var(--line);border-radius:999px;color:var(--gold);font-size:.88rem;background:rgba(230,201,138,.06)}
+.eyebrow i{width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px var(--gold)}
+h1{font-size:clamp(2.3rem,5.2vw,4.1rem);line-height:1.25;margin:20px 0 18px;font-weight:800;letter-spacing:-.02em}
+h1 em{font-style:normal;background:linear-gradient(120deg,#F6E3B4,var(--gold) 40%,var(--gold-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{font-size:1.15rem;color:var(--muted);max-width:36em;margin:0 0 30px}
+@media (max-width:960px){.lead{margin-inline:auto}}
+.cta{display:flex;gap:12px;flex-wrap:wrap}
+.chips{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px;padding:0;list-style:none}
+.chips li{font-size:.86rem;color:var(--muted);padding:5px 12px;border-radius:999px;border:1px solid var(--line-2);background:rgba(243,238,227,.03)}
+.chips li b{color:var(--mint);font-weight:600}
+
+/* phone mockup */
+.stage{position:relative;display:grid;place-items:center;min-height:620px}
+.phone{position:relative;width:min(300px,72vw);aspect-ratio:9/20;border-radius:44px;padding:10px;
+  background:linear-gradient(160deg,#2A3533,#0A1110 40%,#1A2321);box-shadow:var(--shadow),0 0 0 1px rgba(230,201,138,.25),inset 0 0 0 1px rgba(255,255,255,.06)}
+.phone img{width:100%;height:100%;object-fit:cover;object-position:top;border-radius:35px}
+.phone.back{position:absolute;width:min(240px,56vw);transform:translate(-62%,8%) rotate(-7deg);opacity:.85;filter:saturate(.9)}
+.phone.front{transform:translate(18%,0)}
+@media (max-width:960px){.phone.back{display:none}.phone.front{transform:none}}
+.float{position:absolute;padding:14px 16px;border-radius:18px;background:rgba(15,32,28,.88);border:1px solid var(--line);backdrop-filter:blur(10px);box-shadow:var(--shadow);font-size:.88rem}
+.float b{display:block;font-size:1.25rem;color:var(--gold);font-weight:800}
+.f1{top:12%;right:-2%}
+.f2{bottom:10%;left:4%}
+@media (max-width:960px){.float{display:none}}
+.glow{position:absolute;width:min(420px,100%);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(230,201,138,.25),transparent 65%);filter:blur(10px)}
+
+/* trust strip */
+.strip{border-block:1px solid var(--line-2);background:linear-gradient(90deg,transparent,rgba(230,201,138,.05),transparent)}
+.strip ul{display:flex;justify-content:center;flex-wrap:wrap;gap:12px 34px;margin:0;padding:18px 0;list-style:none;color:var(--muted);font-size:.95rem}
+.strip li::before{content:"◆";color:var(--gold-2);margin-left:10px;font-size:.6rem;vertical-align:middle}
+
+/* sections */
+section{padding:96px 0}
+.head{max-width:760px;margin:0 auto 54px;text-align:center}
+.head .eyebrow{margin-bottom:14px}
+h2{font-size:clamp(1.8rem,3.4vw,2.7rem);line-height:1.35;margin:0 0 14px;font-weight:800;letter-spacing:-.015em}
+.head p{color:var(--muted);font-size:1.08rem;margin:0}
+.gold-rule{width:72px;height:2px;margin:18px auto 0;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+
+/* month steps */
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;counter-reset:s;padding:0;list-style:none;margin:0}
+@media (max-width:980px){.steps{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.steps{grid-template-columns:1fr}}
+.steps li{position:relative;padding:26px 22px;border-radius:var(--r);background:linear-gradient(180deg,var(--panel),var(--ink-2));border:1px solid var(--line-2)}
+.steps li::before{counter-increment:s;content:counter(s,persian);display:grid;place-items:center;width:40px;height:40px;border-radius:50%;margin-bottom:14px;font-weight:800;color:#1A1407;background:linear-gradient(135deg,#F1DBA6,var(--gold-2))}
+.steps h3{margin:0 0 6px;font-size:1.08rem}
+.steps p{margin:0;color:var(--muted);font-size:.94rem}
+
+/* features */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media (max-width:960px){.grid{grid-template-columns:1fr 1fr}}
+@media (max-width:620px){.grid{grid-template-columns:1fr}}
+.card{position:relative;padding:28px 26px;border-radius:var(--r);background:linear-gradient(180deg,rgba(19,40,36,.9),rgba(11,25,22,.9));border:1px solid var(--line-2);overflow:hidden;transition:border-color .25s,transform .25s}
+.card:hover{border-color:var(--line);transform:translateY(-3px)}
+.card::after{content:"";position:absolute;inset:auto -40% -60% auto;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(28,138,122,.22),transparent 70%)}
+.ico{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;margin-bottom:16px;background:rgba(230,201,138,.1);border:1px solid var(--line)}
+.ico svg{width:24px;height:24px;stroke:var(--gold);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.card h3{margin:0 0 8px;font-size:1.12rem}
+.card p{margin:0;color:var(--muted);font-size:.96rem}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.tags span{font-size:.78rem;color:var(--mint);border:1px solid rgba(128,203,196,.25);padding:2px 9px;border-radius:999px}
+
+/* gallery */
+.gallery{display:flex;gap:22px;overflow-x:auto;scroll-snap-type:x mandatory;padding:10px 20px 30px;scrollbar-width:thin;scrollbar-color:var(--gold-3) transparent}
+.gallery figure{flex:0 0 auto;width:min(250px,64vw);margin:0;scroll-snap-align:center}
+.gallery .phone{width:100%}
+.gallery figcaption{text-align:center;margin-top:14px;color:var(--muted);font-size:.92rem}
+.gallery figcaption b{display:block;color:var(--cream);font-size:1rem}
+
+/* split (water) */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:28px;align-items:center}
+.split>*,.grid>*,.steps>*{min-width:0}
+@media (max-width:900px){.split{grid-template-columns:1fr}}
+.panel{padding:30px;border-radius:var(--r);background:linear-gradient(180deg,var(--panel),var(--ink-2));border:1px solid var(--line-2)}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px dashed var(--line-2);font-size:.98rem}
+.kv:last-child{border-bottom:0}
+.kv span:last-child{font-weight:700;font-variant-numeric:tabular-nums}
+.bar{display:flex;height:16px;border-radius:6px;overflow:hidden;gap:2px;margin:18px 0 8px}
+.bar i{display:block}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.86rem;color:var(--muted)}
+.legend b{display:inline-block;width:10px;height:10px;border-radius:50%;margin-left:6px;vertical-align:middle}
+.options{display:grid;gap:10px;margin:18px 0 0;padding:0;list-style:none}
+.options li{padding:12px 16px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:rgba(243,238,227,.02);font-size:.95rem}
+.options li b{color:var(--gold)}
+
+/* bill */
+.bill-art{position:relative;max-width:440px;margin:0 auto;transform:rotate(-2.5deg)}
+.bill-art img{border-radius:18px;box-shadow:var(--shadow),0 0 0 1px rgba(230,201,138,.3)}
+.bill-art::before{content:"";position:absolute;inset:-30px;border-radius:40px;background:radial-gradient(circle,rgba(230,201,138,.2),transparent 70%);z-index:-1}
+
+/* privacy */
+.privacy{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media (max-width:900px){.privacy{grid-template-columns:1fr 1fr}}
+@media (max-width:520px){.privacy{grid-template-columns:1fr}}
+.privacy div{padding:22px;border-radius:var(--r);border:1px solid var(--line-2);background:rgba(15,32,28,.6);text-align:center}
+.privacy b{display:block;font-size:2rem;font-weight:800;background:linear-gradient(120deg,#F6E3B4,var(--gold-2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.privacy span{color:var(--muted);font-size:.93rem}
+
+/* rigor list */
+.check{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+.check li{padding-right:30px;position:relative;color:var(--muted)}
+.check li::before{content:"";position:absolute;right:0;top:.55em;width:16px;height:16px;border-radius:50%;background:radial-gradient(circle at 50% 50%,var(--gold) 0 3px,transparent 4px),rgba(230,201,138,.15);border:1px solid var(--line)}
+.check li b{color:var(--cream)}
+
+/* download */
+.dl{position:relative;padding:54px 40px;border-radius:32px;text-align:center;overflow:hidden;
+  background:radial-gradient(600px 300px at 50% -20%,rgba(230,201,138,.25),transparent 70%),linear-gradient(180deg,#123029,#0A1714);border:1px solid var(--line)}
+.dl h2{margin-bottom:8px}
+.dl p{color:var(--muted);margin:0 auto 26px;max-width:40em}
+.meta{display:flex;justify-content:center;gap:10px 24px;flex-wrap:wrap;margin-top:22px;color:var(--dim);font-size:.88rem}
+.meta code{font-family:ui-monospace,monospace;font-size:.78rem;color:var(--muted);word-break:break-all}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:30px;text-align:right}
+@media (max-width:760px){.how{grid-template-columns:1fr}}
+.how div{padding:16px 18px;border-radius:var(--r-sm);background:rgba(7,17,15,.45);border:1px solid var(--line-2);font-size:.92rem;color:var(--muted)}
+.how b{color:var(--gold);display:block;margin-bottom:4px}
+
+/* faq */
+.faq{max-width:820px;margin:0 auto;display:grid;gap:12px}
+details{border-radius:var(--r-sm);border:1px solid var(--line-2);background:rgba(15,32,28,.55);padding:4px 20px}
+details[open]{border-color:var(--line)}
+summary{cursor:pointer;list-style:none;padding:16px 0;font-weight:700;display:flex;justify-content:space-between;gap:12px}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--gold);font-weight:400;font-size:1.4rem;line-height:1}
+details[open] summary::after{content:"−"}
+details p{margin:0 0 16px;color:var(--muted)}
+
+footer{padding:50px 0 60px;border-top:1px solid var(--line-2);color:var(--dim);font-size:.9rem}
+footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center}
+footer a{color:var(--muted);text-decoration:none}
+footer a:hover{color:var(--gold)}
+
+/* reveal */
+.reveal{opacity:0;transform:translateY(18px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none}}
+.num{font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="aura" aria-hidden="true"></div>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="34" height="34"><span>دنگ</span></a>
+    <nav aria-label="بخش‌ها"><ul>
+      <li><a href="#month">ماه شما</a></li>
+      <li><a href="#features">امکانات</a></li>
+      <li><a href="#screens">تصاویر</a></li>
+      <li><a href="#water">آب و کنتور</a></li>
+      <li><a href="#privacy">حریم خصوصی</a></li>
+      <li><a href="#faq">پرسش‌ها</a></li>
+    </ul></nav>
+    <a class="btn btn-gold" href="#download">دریافت برنامه</a>
+  </div>
+</header>
+
+<main id="top">
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap">
+      <div class="reveal">
+        <span class="eyebrow"><i></i>حسابداری ساختمان برای اندروید</span>
+        <h1>سهم هر واحد،<br><em>دقیق، شفاف و بی‌دردسر</em></h1>
+        <p class="lead">«دنگ» هزینه‌های ساختمان را با قاعده‌ای که خودتان تعیین می‌کنید بین واحدها تقسیم می‌کند — مساوی، به نسبت نفرات، متراژ، کنتور آب یا پارکینگ — و برای هر ریال توضیح دارد. قبض هر واحد را با یک لمس بفرستید و وضعیت ساختمان را در یک نگاه ببینید.</p>
+        <div class="cta">
+          <a class="btn btn-gold" href="#download" data-apk>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>
+            دریافت برنامه <span class="num" data-version-label></span>
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/OpScaleHub/Dong" rel="noopener">کد منبع در گیت‌هاب</a>
+        </div>
+        <ul class="chips">
+          <li><b>۱۰۰٪</b> آفلاین</li>
+          <li>بدون ثبت‌نام</li>
+          <li>بدون تبلیغ و ردیابی</li>
+          <li>فارسی و راست‌به‌چپ</li>
+        </ul>
+      </div>
+      <div class="stage reveal" aria-label="تصاویر برنامه">
+        <div class="glow" aria-hidden="true"></div>
+        <div class="phone back"><img src="assets/reports-dark.webp" alt="صفحه گزارش‌ها: وصول شارژ و گردش صندوق" loading="lazy" width="720" height="1600"></div>
+        <div class="phone front"><img src="assets/home-dark.webp" alt="صفحه خانه: این ماه و مراحل کار" width="720" height="1600"></div>
+        <div class="float f1">وصول شارژ این ماه<b class="num">۶۵٪</b></div>
+        <div class="float f2">مبلغ قابل پرداخت واحد ۱-۱<b class="num">۱۹۰٬۲۰۰ تومان</b></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="strip"><ul class="wrap">
+    <li>جمع سهم‌ها همیشه دقیقاً برابر مبلغ</li>
+    <li>دفتر دوطرفه و غیرقابل دستکاری</li>
+    <li>تقویم شمسی و ارقام فارسی</li>
+    <li>خروجی اکسل و پشتیبان امن</li>
+  </ul></div>
+
+  <!-- MONTH -->
+  <section id="month">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="eyebrow"><i></i>کار هر ماه</span>
+        <h2>ماهِ شما در پنج قدم</h2>
+        <p>صفحه «این ماه» همیشه می‌گوید چه کاری مانده و با یک لمس شما را به همان‌جا می‌برد.</p>
+        <div class="gold-rule"></div>
+      </div>
+      <ol class="steps reveal">
+        <li><h3>قرائت کنتورها</h3><p>همه کنتورها در یک صفحه؛ مصرف همان لحظه حساب می‌شود و عدد عجیب علامت می‌خورد.</p></li>
+        <li><h3>هزینه‌های ماه</h3><p>قبض‌ها را ثبت کنید؛ روش تقسیم با یک لمس انتخاب می‌شود و سهم هر واحد را همان‌جا می‌بینید.</p></li>
+        <li><h3>بررسی و بستن ماه</h3><p>هر کمبودی به زبان ساده گفته می‌شود. با بستن ماه، شارژها ثبت و محاسبات ثابت می‌شوند.</p></li>
+        <li><h3>ارسال قبض</h3><p>قبض تصویری هر واحد را در واتس‌اپ، تلگرام یا ایتا بفرستید؛ همراه یادآوری بدهی.</p></li>
+        <li><h3>وصول شارژ</h3><p>دریافت‌ها را ثبت کنید و ببینید چند درصد شارژ وصول شده و بدهی کدام واحد قدیمی است.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section id="features">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="eyebrow"><i></i>امکانات</span>
+        <h2>هر چیزی که مدیر ساختمان لازم دارد</h2>
+        <p>برای ساختمان واقعی ساخته شده؛ هیچ قاعده‌ای از پیش تحمیل نمی‌شود و همه‌چیز قابل تنظیم است.</p>
+        <div class="gold-rule"></div>
+      </div>
+      <div class="grid">
+        <article class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg></div>
+          <h3>تقسیم هوشمند هزینه‌ها</h3><p>هر دسته هزینه روش خودش را دارد؛ ترکیب ثابت + درصد + باقیمانده هم ممکن است. گرد کردن هرگز ریالی را گم نمی‌کند.</p>
+          <div class="tags"><span>مساوی</span><span>نفرات</span><span>متراژ</span><span>کنتور</span><span>وزنی</span><span>مبلغ مشخص</span><span>پارکینگ</span></div></article>
+        <article class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3c3.5 4.2 6 7.6 6 10.5A6 6 0 0 1 6 13.5C6 10.6 8.5 7.2 12 3z"/></svg></div>
+          <h3>آب با کنتور اصلی و واحدها</h3><p>تطبیق کنتور اصلی با کنتورهای واحدها، تعویض و گردش کنتور، تعرفه پلکانی و جلوگیری از دوبار دریافت هزینه آب.</p></article>
+        <article class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg></div>
+          <h3>قبض تصویری، یک لمس</h3><p>قبض فارسی و زیبای هر واحد با ریز شارژ، پرداختی و مبلغ قابل پرداخت — آماده ارسال در پیام‌رسان‌ها.</p></article>
+        <article class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
+          <h3>گزارش‌های تصویری</h3><p>درصد وصول، قدمت بدهی‌ها، گردش صندوق، هزینه‌ها نسبت به ماه قبل، روند ماه‌ها، رشد اندوخته و آبِ بی‌حساب.</p></article>
+        <article class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/><path d="M18 16l2 2 3-3"/></svg></div>
+          <h3>حساب‌های قابل اعتماد</h3><p>دفتر دوطرفه و فقط‌افزودنی؛ هر اصلاح با دلیل و به‌صورت تراکنش برگشتی ثبت می‌شود. ماه بسته‌شده هرگز بی‌صدا عوض نمی‌شود.</p></article>
+        <article class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></div>
+          <h3>پشتیبان، بازیابی و اکسل</h3><p>فایل پشتیبان با کد کنترل، پیش‌نمایش پیش از بازیابی، خروجی کارپوشه اکسل، فایل CSV و صورتحساب چاپی.</p></article>
+        <article class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg></div>
+          <h3>چند ساختمان</h3><p>هر ساختمان با واحدها، صندوق‌ها، تنظیمات و سابقه مستقل خودش؛ جابه‌جایی با یک لمس.</p></article>
+        <article class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M17 11h5M19.5 8.5v5"/></svg></div>
+          <h3>ساکنان و پارکینگ</h3><p>تاریخچه تعداد ساکنان با تاریخ تغییر، و پارکینگ جدا از واحد: مالکیت، اجاره و «در استفاده» هر کدام جداگانه.</p></article>
+        <article class="card reveal"><div class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+          <h3>تقویم شمسی و تومان</h3><p>تاریخ شمسی با انتخابگر تقویم، ارقام فارسی، و نمایش تومان در حالی که مبالغ دقیق به ریال نگه داشته می‌شوند.</p></article>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCREENS -->
+  <section id="screens">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="eyebrow"><i></i>نگاهی به برنامه</span>
+        <h2>ساده برای کار روزانه، عمیق برای حسابرسی</h2>
+        <p>تصاویر واقعی از برنامه با داده‌های نمایشی.</p>
+        <div class="gold-rule"></div>
+      </div>
+    </div>
+    <div class="gallery" tabindex="0" aria-label="گالری تصاویر؛ برای دیدن بقیه افقی پیمایش کنید">
+      <figure><div class="phone"><img src="assets/home-dark.webp" alt="خانه: این ماه و پنج مرحله" loading="lazy" width="720" height="1600"></div><figcaption><b>این ماه</b>مراحل کار و وضعیت صندوق</figcaption></figure>
+      <figure><div class="phone"><img src="assets/reports-dark.webp" alt="گزارش وصول شارژ و گردش صندوق" loading="lazy" width="720" height="1600"></div><figcaption><b>گزارش‌ها</b>وصول شارژ و گردش صندوق</figcaption></figure>
+      <figure><div class="phone"><img src="assets/reports2-dark.webp" alt="هزینه‌ها به تفکیک دسته" loading="lazy" width="720" height="1600"></div><figcaption><b>هزینه‌ها</b>به تفکیک دسته، نسبت به ماه قبل</figcaption></figure>
+      <figure><div class="phone"><img src="assets/units-dark.webp" alt="واحدها و قدمت بدهی‌ها" loading="lazy" width="720" height="1600"></div><figcaption><b>واحدها</b>بدهی‌ها به تفکیک قدمت</figcaption></figure>
+      <figure><div class="phone"><img src="assets/unit-dark.webp" alt="صفحه یک واحد: پول شما کجا رفت" loading="lazy" width="720" height="1600"></div><figcaption><b>حساب هر واحد</b>پول شما کجا رفت</figcaption></figure>
+      <figure><div class="phone"><img src="assets/expense-dark.webp" alt="ثبت هزینه با پیش‌نمایش سهم هر واحد" loading="lazy" width="720" height="1600"></div><figcaption><b>ثبت هزینه</b>چه کسی چقدر می‌پردازد</figcaption></figure>
+      <figure><div class="phone"><img src="assets/readings-dark.webp" alt="قرائت همه کنتورها در یک صفحه" loading="lazy" width="720" height="1600"></div><figcaption><b>کنتورها</b>همه در یک صفحه، با هشدار</figcaption></figure>
+    </div>
+  </section>
+
+  <!-- WATER -->
+  <section id="water">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="eyebrow"><i></i>آب و کنتور</span>
+        <h2>قبض آب را منصفانه تقسیم کنید</h2>
+        <p>قبض اداره آب برای کنتور اصلی می‌آید؛ «دنگ» آن را بر اساس کنتور هر واحد تقسیم می‌کند و تکلیف آبِ بی‌حساب را شما تعیین می‌کنید.</p>
+        <div class="gold-rule"></div>
+      </div>
+      <div class="split">
+        <div class="panel reveal">
+          <div class="kv"><span>قبض آب ماه</span><span class="num">۱٬۸۰۰٬۰۰۰ تومان</span></div>
+          <div class="kv"><span>کنتور اصلی</span><span class="num">۱۴۲ مترمکعب</span></div>
+          <div class="kv"><span>جمع کنتورهای واحدها</span><span class="num">۱۱۵٫۵ مترمکعب</span></div>
+          <div class="kv"><span>آبِ بی‌حساب (مشاعات، نشتی، خطای کنتور)</span><span class="num">۲۶٫۵ مترمکعب</span></div>
+          <div class="bar" role="img" aria-label="۸۱ درصد بر اساس کنتور واحدها، ۱۹ درصد سهم مشترک">
+            <i style="flex:81.3;background:#3987E5"></i><i style="flex:18.7;background:var(--gold-2)"></i>
+          </div>
+          <div class="legend"><span><b style="background:#3987E5"></b>بر اساس مصرف هر واحد: <span class="num">۱٬۴۶۴٬۱۰۰</span></span><span><b style="background:var(--gold-2)"></b>سهم مشترک: <span class="num">۳۳۵٬۹۰۰</span></span></div>
+        </div>
+        <div class="reveal">
+          <h3 style="margin:0 0 8px;font-size:1.3rem">سهم مشترک را چه کسی بپردازد؟ شما انتخاب کنید.</h3>
+          <p style="color:var(--muted);margin:0">هیچ عددی بی‌صدا تقسیم نمی‌شود؛ اختلاف کنتور همیشه نمایش داده می‌شود و روندش هشدار نشتی است.</p>
+          <ul class="options">
+            <li><b>مساوی</b> بین همه واحدها (پیش‌فرض)</li>
+            <li><b>به نسبت نفرات</b> یا <b>متراژ</b></li>
+            <li><b>از صندوق ساختمان</b> — بدون شارژ به ساکنان</li>
+            <li><b>به نسبت مصرف</b> — کل قبض فقط بر اساس کنتورها</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BILL -->
+  <section id="bill">
+    <div class="wrap split">
+      <div class="reveal">
+        <span class="eyebrow"><i></i>ارسال قبض</span>
+        <h2 style="margin-top:14px">قبضی که ساکن بی‌سؤال می‌فهمد</h2>
+        <p style="color:var(--muted)">ریز شارژ هر دسته، مانده قبلی، پرداختی و مبلغ قابل پرداخت — به فارسی و تومان، به‌صورت تصویر. از صفحه هر واحد با یک لمس به واتس‌اپ، تلگرام یا ایتا بفرستید؛ همراه پیام یادآوری آماده.</p>
+        <ul class="check">
+          <li><b>بدون مجوز اضافه:</b> تصویر فقط موقتاً در حافظه برنامه ساخته و از طریق پنجره اشتراک گوشی ارسال می‌شود.</li>
+          <li><b>صورتحساب کامل ماه</b> برای همه واحدها هم به‌صورت صفحه چاپی قابل خروجی است.</li>
+        </ul>
+      </div>
+      <div class="bill-art reveal"><img src="assets/bill.webp" alt="نمونه قبض شارژ واحد ۱-۱: مبلغ قابل پرداخت ۱۹۰٬۲۰۰ تومان" loading="lazy" width="720" height="776"></div>
+    </div>
+  </section>
+
+  <!-- PRIVACY -->
+  <section id="privacy">
+    <div class="wrap">
+      <div class="head reveal">
+        <span class="eyebrow"><i></i>حریم خصوصی</span>
+        <h2>اطلاعات ساختمان شما، فقط روی گوشی شما</h2>
+        <p>«دنگ» حتی اجازه دسترسی به اینترنت ندارد. هیچ سرور، حساب کاربری، تبلیغ یا آماری در کار نیست.</p>
+        <div class="gold-rule"></div>
+      </div>
+      <div class="privacy reveal">
+        <div><b>۰</b><span>اتصال به اینترنت</span></div>
+        <div><b>۰</b><span>حساب کاربری و ثبت‌نام</span></div>
+        <div><b>۰</b><span>تبلیغ و ردیابی</span></div>
+        <div><b>۱۰۰٪</b><span>کنترل شما بر پشتیبان‌ها</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RIGOR -->
+  <section id="rigor">
+    <div class="wrap split">
+      <div class="reveal">
+        <span class="eyebrow"><i></i>دقت حسابداری</span>
+        <h2 style="margin-top:14px">ساخته‌شده مثل یک نرم‌افزار مالی، نه یک دفترچه</h2>
+        <p style="color:var(--muted)">هر عدد قابل توضیح است و هر تغییر سابقه دارد.</p>
+      </div>
+      <ul class="check reveal">
+        <li><b>جمع سهم‌ها همیشه برابر مبلغ:</b> باقیمانده گرد کردن به روش بزرگ‌ترین باقیمانده توزیع می‌شود.</li>
+        <li><b>ماه بسته‌شده ثابت می‌ماند:</b> ورودی‌ها، قواعد و نتایج ذخیره می‌شوند؛ اصلاح بعدی فقط با «اصلاحیه» مرتبط.</li>
+        <li><b>پرداخت درآمد نیست، انتقال به اندوخته هزینه نیست:</b> دفتر دوطرفه از شمارش تکراری جلوگیری می‌کند.</li>
+        <li><b>آزمون‌شده:</b> بیش از ۱۰۰ آزمون خودکار، به‌همراه یک کارپوشه اکسل مرجع که همان محاسبات را مستقل تکرار می‌کند.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD -->
+  <section id="download">
+    <div class="wrap">
+      <div class="dl reveal">
+        <span class="eyebrow"><i></i>رایگان</span>
+        <h2 style="margin-top:14px">«دنگ» را همین حالا نصب کنید</h2>
+        <p>برای اندروید ۸ و بالاتر. فایل نصبی مستقیماً از صفحه انتشار گیت‌هاب دریافت می‌شود.</p>
+        <div class="cta" style="justify-content:center">
+          <a class="btn btn-gold" href="https://github.com/OpScaleHub/Dong/releases/latest/download/dong.apk" data-apk>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-5-5m5 5l5-5M4 21h16"/></svg>
+            دریافت فایل نصبی (APK)
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/OpScaleHub/Dong/releases" rel="noopener">همه نسخه‌ها و تغییرات</a>
+        </div>
+        <div class="meta">
+          <span>نسخه <b class="num" data-version>—</b></span>
+          <span data-size-wrap hidden>حجم <b class="num" data-size></b></span>
+          <span data-date-wrap hidden>انتشار <b class="num" data-date></b></span>
+          <span data-sha-wrap hidden>SHA-256: <code data-sha></code></span>
+        </div>
+        <div class="how">
+          <div><b>۱. دریافت</b>فایل را با مرورگر گوشی دانلود کنید.</div>
+          <div><b>۲. اجازه نصب</b>در صورت درخواست، نصب از این منبع را برای مرورگر مجاز کنید.</div>
+          <div><b>۳. شروع</b>«راه‌اندازی ساختمان» یا «ساختمان نمایشی» را بزنید.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq">
+    <div class="wrap">
+      <div class="head reveal"><span class="eyebrow"><i></i>پرسش‌های رایج</span><h2>پرسش‌ها</h2><div class="gold-rule"></div></div>
+      <div class="faq reveal">
+        <details><summary>آیا اینترنت لازم است؟</summary><p>خیر. برنامه کاملاً آفلاین است و حتی مجوز اینترنت ندارد. همه اطلاعات روی همان گوشی می‌ماند.</p></details>
+        <details><summary>اگر گوشی عوض شود، اطلاعات از دست می‌رود؟</summary><p>از «تنظیمات و پشتیبان» به‌طور منظم فایل پشتیبان بگیرید و جای امنی نگه دارید. روی گوشی جدید، از همان صفحه اول «بازیابی از فایل پشتیبان» را بزنید.</p></details>
+        <details><summary>چند گوشی می‌توانند هم‌زمان یک ساختمان را مدیریت کنند؟</summary><p>در این نسخه، هر ساختمان باید یک گوشی اصلی داشته باشد. فایل پشتیبان و خروجی اکسل را می‌توانید به اشتراک بگذارید، اما این کار گوشی‌ها را همگام نمی‌کند.</p></details>
+        <details><summary>تقسیم آب با کنتور چطور کار می‌کند؟</summary><p>قبض آب را یک بار ثبت کنید؛ سهم مصرف هر واحد بر اساس کنتورش و سهم مشترک (اختلاف کنتور اصلی) با روشی که انتخاب می‌کنید تقسیم می‌شود. پیش از ثبت، سهم هر واحد را می‌بینید.</p></details>
+        <details><summary>مبالغ تومان است یا ریال؟</summary><p>مبالغ دقیق به ریال نگه داشته می‌شوند و به‌طور پیش‌فرض به تومان نمایش داده می‌شوند. در تنظیمات هر ساختمان قابل تغییر است.</p></details>
+        <details><summary>هزینه دارد؟</summary><p>خیر. رایگان و بدون تبلیغ است و کد منبع آن در گیت‌هاب در دسترس است.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28"><span>دنگ</span></a>
+    <span>حسابداری و مدیریت ساختمان، بدون اینترنت · داده‌های نمایش‌داده‌شده ساختگی‌اند</span>
+    <span><a href="https://github.com/OpScaleHub/Dong" rel="noopener">گیت‌هاب</a> · <a href="https://github.com/OpScaleHub/Dong/releases" rel="noopener">نسخه‌ها</a></span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  // Reveal on scroll (skipped entirely when the user prefers reduced motion).
+  var els=document.querySelectorAll('.reveal');
+  if(!('IntersectionObserver' in window)||matchMedia('(prefers-reduced-motion: reduce)').matches){els.forEach(function(e){e.classList.add('in')});}
+  else{var io=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target);}})},{rootMargin:'0px 0px -8% 0px'});els.forEach(function(e){io.observe(e)});}
+  // Release details, written by scripts/release.sh.
+  var fa=function(s){return String(s).replace(/[0-9]/g,function(d){return '۰۱۲۳۴۵۶۷۸۹'[d]})};
+  fetch('release.json',{cache:'no-store'}).then(function(r){return r.json()}).then(function(j){
+    document.querySelectorAll('[data-version]').forEach(function(e){e.textContent=fa(j.version)});
+    document.querySelectorAll('[data-version-label]').forEach(function(e){e.textContent=fa(j.version)});
+    if(j.sizeBytes>0){document.querySelector('[data-size]').textContent=fa((j.sizeBytes/1048576).toFixed(1).replace('.','٫'))+' مگابایت';document.querySelector('[data-size-wrap]').hidden=false;}
+    if(j.dateJalali){document.querySelector('[data-date]').textContent=fa(j.dateJalali);document.querySelector('[data-date-wrap]').hidden=false;}
+    if(j.sha256){document.querySelector('[data-sha]').textContent=j.sha256;document.querySelector('[data-sha-wrap]').hidden=false;}
+    if(j.apk){document.querySelectorAll('[data-apk]').forEach(function(a){if(a.getAttribute('href')!=='#download')a.href=j.apk});}
+  }).catch(function(){});
+})();
+</script>
+</body>
+</html>
