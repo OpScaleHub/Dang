@@ -99,7 +99,7 @@ fun SettingsScreen(vm: AppViewModel) {
         }
         item {
             SectionCard(S.backupTitle, subtitle = S.backupNote) {
-                Button(onClick = { backupLauncher.launch("dong-backup-${Fmt.date(vm.today, building.calendar, persian = false).replace('/', '-')}.json") }, Modifier.fillMaxWidth()) { Text(S.backupNow) }
+                Button(onClick = { backupLauncher.launch("dang-backup-${Fmt.date(vm.today, building.calendar, persian = false).replace('/', '-')}.json") }, Modifier.fillMaxWidth()) { Text(S.backupNow) }
                 RestoreButton(vm)
             }
         }

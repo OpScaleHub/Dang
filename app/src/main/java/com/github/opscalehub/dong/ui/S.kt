@@ -7,7 +7,8 @@ package com.github.opscalehub.dong.ui
  */
 object S {
     const val appName = "دنگ"
-    const val appTagline = "حسابداری و مدیریت ساختمان، بدون اینترنت"
+    const val appTagline = "حساب‌وکتاب ساختمان، ساده و شفاف"
+    const val appShortDescription = "مدیریت هزینه‌ها و شارژ ساختمان، بدون نیاز به اینترنت"
 
     // navigation
     const val units = "واحدها"

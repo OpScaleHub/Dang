@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates the Dong accounting prototype workbook (Persian, RTL).
+"""Generates the Dang (دنگ) accounting prototype workbook (Persian, RTL).
 
 Usage: python build_workbook.py [output.xlsx]
 
@@ -384,7 +384,7 @@ def build(out):
     for i, (k, v, fmt) in enumerate(settings, start=4):
         S.cell(row=i, column=1, value=k).font = F_CALC
         inp(S, f"B{i}", v, fmt)
-    S["B7"].comment = Comment("مثلاً ۱۰۰۰ یعنی سهم‌ها به مضرب ۱۰۰۰ ریال گرد می‌شوند. باقیمانده به روش بزرگ‌ترین باقیمانده توزیع می‌شود.", "Dong")
+    S["B7"].comment = Comment("مثلاً ۱۰۰۰ یعنی سهم‌ها به مضرب ۱۰۰۰ ریال گرد می‌شوند. باقیمانده به روش بزرگ‌ترین باقیمانده توزیع می‌شود.", "Dang")
     dv_list(S, "B12", R_BASIS)
     dv_nonneg(S, "B7")
     INC_REF = f"{q('تنظیمات')}!$B$7"
@@ -996,8 +996,8 @@ def build(out):
     K[f"A{kN + 3}"] = "مقادیر «مورد انتظار» ثابت‌اند و فقط برای همین داده نمونه معتبرند؛ با تغییر ورودی‌ها انتظار می‌رود برخی سناریوها «نادرست» شوند."
     K[f"A{kN + 3}"].font = F_NOTE
 
-    wb.properties.title = "Dong — Building accounting prototype"
-    wb.properties.creator = "Dong"
+    wb.properties.title = "Dang (دنگ) — Building accounting prototype"
+    wb.properties.creator = "Dang"
     order = ["راهنما", "تنظیمات", "واحدها", "پارکینگ", "کنتورها", "دوره‌ها", "دسته‌ها", "هزینه‌ها", "اقلام شارژ",
              "شمول", "وزن‌ها", "سطرهای تسهیم", "محاسبه تسهیم", "ریز شارژ", "افتتاحیه", "دریافت‌ها", "پرداخت‌ها",
              "تعدیل‌ها", "انتقال‌ها", "دفتر صندوق", "مانده واحدها", "صندوق‌ها", "خلاصه ماهانه", "کنترل‌ها", "فهرست‌ها"]
@@ -1010,7 +1010,7 @@ def build(out):
 
 
 if __name__ == "__main__":
-    out = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).with_name("Dong-accounting-prototype.xlsx"))
+    out = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).with_name("Dang-accounting-prototype.xlsx"))
     ref, n = build(out)
     print(f"wrote {out} with {n} checks")
     print(json.dumps({"unitChargeTotals": ref["unitChargeTotals"], "closing": ref["unitClosingBalances"],

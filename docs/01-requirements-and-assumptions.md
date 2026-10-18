@@ -1,7 +1,7 @@
 # 01 — Requirements, Assumptions and Open Decisions
 
-Project: **Dong (دنگ)** — offline-first Android building management & accounting
-("BuildingLedger" in the original brief). *Dong* is Persian for "a share of a
+Project: **Dang (دنگ)** — offline-first Android building management & accounting
+("BuildingLedger" in the original brief). *Dang* (دنگ) is Persian for "a share of a
 common cost", which is exactly what the app computes.
 
 ## 1. Starting point

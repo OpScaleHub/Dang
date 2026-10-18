@@ -2,7 +2,7 @@
 
 Status: **implemented** (all three phases; see docs/05 for verification).
 
-Goal: turn Dong from "a ledger with screens" into a tool a non-technical
+Goal: turn Dang from "a ledger with screens" into a tool a non-technical
 building manager enjoys using every month, with reporting worth opening.
 The financial engine does not change; every phase keeps all existing tests
 green and adds its own.

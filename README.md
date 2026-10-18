@@ -1,11 +1,13 @@
-# دنگ (Dong) — offline building management & accounting
+# دنگ (Dang) — offline building management & accounting
+
+**«حساب‌وکتاب ساختمان، ساده و شفاف»** — مدیریت هزینه‌ها و شارژ ساختمان، بدون نیاز به اینترنت.
 
 **دنگ** یعنی «سهم هر نفر از یک هزینه مشترک». این برنامه اندرویدی هزینه‌های
 ساختمان را بر اساس قواعدی که مدیر ساختمان تعیین می‌کند (مساوی، تعداد ساکنان،
 متراژ، کنتور آب، پارکینگ، وزنی یا مبلغ مشخص) بین واحدها تقسیم می‌کند، دفتر
 مالی دوطرفه نگه می‌دارد و بدون اینترنت، حساب کاربری یا سرور کار می‌کند.
 
-Dong is an offline-first Android app (Persian, right-to-left) for residential
+Dang (دنگ) is an offline-first Android app (Persian, right-to-left) for residential
 building management and expense accounting. It runs entirely on the phone: no
 backend, no account, no analytics. The only network use is checking for and
 downloading a new version of the app (can be switched off in Settings).

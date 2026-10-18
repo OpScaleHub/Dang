@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cut a release of Dong entirely from this machine:
+# Cut a release of Dang (دنگ) entirely from this machine:
 #   bump version -> run tests -> build signed APK -> update the landing page's
 #   release.json -> commit + tag -> push -> GitHub Release with the APK attached.
 # The landing page (site/) is deployed by .github/workflows/pages.yml on push.
@@ -46,7 +46,7 @@ if [ ! -f "$SIGNING" ]; then
   PASS=$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')
   KS="$(dirname "$SIGNING")/dong-release.jks"
   keytool -genkeypair -keystore "$KS" -alias dong -keyalg RSA -keysize 4096 -validity 36500 \
-    -storepass "$PASS" -keypass "$PASS" -dname "CN=Dong, O=OpScaleHub" >/dev/null 2>&1
+    -storepass "$PASS" -keypass "$PASS" -dname "CN=Dang, O=OpScaleHub" >/dev/null 2>&1
   umask 077; printf 'storeFile=%s\nstorePassword=%s\nkeyAlias=dong\nkeyPassword=%s\n' "$KS" "$PASS" "$PASS" > "$SIGNING"
   printf '\033[1;31m!! Back up %s and %s somewhere safe.\n!! Without them no future version can update installed copies.\033[0m\n' "$KS" "$SIGNING"
 fi
@@ -77,11 +77,11 @@ say "Building signed release APK"
 APK=app/build/outputs/apk/release/app-release.apk
 [ -f "$APK" ] || die "release APK missing (is the signing config valid?)"
 OUT=build/release; mkdir -p "$OUT"
-cp "$APK" "$OUT/dong.apk"; cp "$APK" "$OUT/dong-$next.apk"
-SHA=$(sha256sum "$OUT/dong.apk" | cut -d' ' -f1)
-SIZE=$(stat -c %s "$OUT/dong.apk")
+cp "$APK" "$OUT/dang.apk"; cp "$APK" "$OUT/dang-$next.apk"
+SHA=$(sha256sum "$OUT/dang.apk" | cut -d' ' -f1)
+SIZE=$(stat -c %s "$OUT/dang.apk")
 APKSIGNER=$(ls -d "${ANDROID_HOME:-$HOME/Android/Sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)
-if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs "$OUT/dong.apk" | grep -m1 "certificate DN"; else echo "(apksigner not found; skipped signature check)"; fi
+if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs "$OUT/dang.apk" | grep -m1 "certificate DN"; else echo "(apksigner not found; skipped signature check)"; fi
 
 # ---- landing-page metadata + notes ------------------------------------------
 MIN_SDK=$(sed -n 's/.*minSdk = \([0-9]*\).*/\1/p' app/build.gradle.kts | head -1)
@@ -104,9 +104,9 @@ json.dump({
   "version": v, "versionCode": code, "minSdk": min_sdk,
   "date": d.isoformat(), "dateJalali": jalali(d),
   "sizeBytes": size, "sha256": sha,
-  "apk": "https://github.com/OpScaleHub/Dong/releases/latest/download/dong.apk",
+  "apk": "https://github.com/OpScaleHub/Dong/releases/latest/download/dang.apk",
   # Read by the in-app updater (update/Updater.kt): fixed to this version's file.
-  "apkPinned": f"https://github.com/OpScaleHub/Dong/releases/download/v{v}/dong-{v}.apk",
+  "apkPinned": f"https://github.com/OpScaleHub/Dong/releases/download/v{v}/dang-{v}.apk",
   "notes": f"https://github.com/OpScaleHub/Dong/releases/tag/v{v}",
 }, open("site/release.json", "w"), indent=2, ensure_ascii=False)
 open("site/release.json", "a").write("\n")
@@ -117,7 +117,7 @@ RANGE=${PREV:+$PREV..}HEAD
 {
   echo "## دنگ $next"
   echo
-  echo "**دریافت:** \`dong.apk\` (اندروید ۸ و بالاتر)"
+  echo "**دریافت:** \`dang.apk\` (اندروید ۸ و بالاتر)"
   echo
   section() { local t=$1 p=$2 l; l=$(git log --no-merges --format='- %s' "$RANGE" | grep -E "^- $p(\(|:)" | sed -E "s/^- $p(\([^)]*\))?: /- /" || true); if [ -n "$l" ]; then printf '### %s\n%s\n\n' "$t" "$l"; fi; }
   section "Features" feat
@@ -125,21 +125,21 @@ RANGE=${PREV:+$PREV..}HEAD
   section "Performance" perf
   other=$(git log --no-merges --format='- %s' "$RANGE" | grep -vE '^- (feat|fix|perf|chore\(release\))(\(|:)' || true)
   if [ -n "$other" ]; then printf '### Other\n%s\n\n' "$other"; fi
-  echo "SHA-256 (\`dong.apk\`): \`$SHA\`"
+  echo "SHA-256 (\`dang.apk\`): \`$SHA\`"
 } > "$OUT/notes.md"
 
 say "Release notes"; cat "$OUT/notes.md"
-if [ $DRY = 1 ]; then say "Dry run: built $OUT/dong.apk ($SIZE bytes); nothing committed or pushed"; exit 0; fi
+if [ $DRY = 1 ]; then say "Dry run: built $OUT/dang.apk ($SIZE bytes); nothing committed or pushed"; exit 0; fi
 
 # ---- commit, tag, push, publish ---------------------------------------------
 say "Committing, tagging and pushing $TAG"
 git add version.properties site/release.json
 git commit -q -m "chore(release): $TAG"
-git tag -a "$TAG" -m "Dong $next"
+git tag -a "$TAG" -m "Dang $next"
 git push -q origin main "$TAG"
 
 say "Publishing GitHub Release"
-gh release create "$TAG" "$OUT/dong.apk" "$OUT/dong-$next.apk" \
+gh release create "$TAG" "$OUT/dang.apk" "$OUT/dang-$next.apk" \
   --repo "$REPO" --title "دنگ $next" --notes-file "$OUT/notes.md" --latest
 
 say "Done: https://github.com/$REPO/releases/tag/$TAG"

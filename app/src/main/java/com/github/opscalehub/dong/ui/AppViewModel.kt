@@ -125,12 +125,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 block()
                 true
             } catch (e: OpException) {
-                Log.i("Dong", "action rejected: ${e.code}")
+                Log.i("Dang", "action rejected: ${e.code}")
                 _messages.emit(Fa.error(e.code))
                 false
             } catch (e: Exception) {
                 // Log the type only: messages may contain resident data.
-                Log.w("Dong", "action failed: ${e.javaClass.simpleName}")
+                Log.w("Dang", "action failed: ${e.javaClass.simpleName}")
                 _messages.emit(S.unexpectedError)
                 false
             } finally {

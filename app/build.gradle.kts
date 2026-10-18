@@ -33,7 +33,9 @@ android {
         // Update check (update/Updater.kt). Release builds check on start; debug builds only when
         // -PupdateUrl=... is given, so tests never touch the network.
         val updateUrl = (findProperty("updateUrl") as String?)
-        buildConfigField("String", "UPDATE_URL", "\"${updateUrl ?: "https://opscalehub.github.io/Dong/release.json"}\"")
+        // Comma-separated, tried in order: the Pages address after the Dong → Dang rename, then the old one.
+        val updateUrls = updateUrl ?: "https://opscalehub.github.io/Dang/release.json,https://opscalehub.github.io/Dong/release.json"
+        buildConfigField("String", "UPDATE_URLS", "\"$updateUrls\"")
         buildConfigField("boolean", "UPDATE_AUTO_DEBUG", "${updateUrl != null}")
     }
 

@@ -46,5 +46,5 @@ def main(path):
 
 
 if __name__ == "__main__":
-    p = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).with_name("Dong-accounting-prototype.xlsx"))
+    p = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).with_name("Dang-accounting-prototype.xlsx"))
     sys.exit(main(p))

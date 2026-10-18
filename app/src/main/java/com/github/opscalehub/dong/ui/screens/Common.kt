@@ -35,7 +35,7 @@ fun <T> derived(vm: AppViewModel, vararg keys: Any?, block: suspend () -> T): St
             throw e
         } catch (e: Exception) {
             // Degrade instead of crashing the screen; log the type only (no resident data).
-            android.util.Log.w("Dong", "derived failed: ${e.javaClass.simpleName}")
+            android.util.Log.w("Dang", "derived failed: ${e.javaClass.simpleName}")
             null
         }
     }

@@ -24,7 +24,7 @@ import org.junit.Test
 import java.io.File
 
 /**
- * Runs the exact scenario of workbook/Dong-accounting-prototype.xlsx through
+ * Runs the exact scenario of workbook/Dang-accounting-prototype.xlsx through
  * the Kotlin engine and compares every share and balance with
  * workbook/expected-results.json (produced by the independent exact-fraction
  * reference implementation in build_workbook.py, whose values the workbook

@@ -52,7 +52,7 @@ class UpdaterTest {
     }
 
     private fun updater(fetch: (String) -> String, auto: Boolean = true) =
-        Updater(ApplicationProvider.getApplicationContext(), currentCode = 2, url = "https://example.invalid/release.json", autoCheckAllowed = auto, fetch = fetch)
+        Updater(ApplicationProvider.getApplicationContext(), currentCode = 2, urls = listOf("https://example.invalid/release.json"), autoCheckAllowed = auto, fetch = fetch)
 
     private fun settled(u: Updater) = runBlocking { withTimeout(5_000) { u.state.first { it !is UpdateState.Idle && it !is UpdateState.Checking } } }
 
@@ -63,6 +63,16 @@ class UpdaterTest {
         assertTrue(s is UpdateState.Available && s.info.versionCode == 3)
         u.skip((s as UpdateState.Available).info)
         assertEquals(UpdateState.Idle, u.state.value)
+    }
+
+    @Test fun fallsBackToTheNextAddressWhenTheFirstFails() {
+        val asked = mutableListOf<String>()
+        val u = Updater(ApplicationProvider.getApplicationContext(), currentCode = 2,
+            urls = listOf("https://new.invalid/release.json", "https://old.invalid/release.json"), autoCheckAllowed = true,
+            fetch = { asked += it; if (it.startsWith("https://new")) error("404") else json(3) })
+        u.check(manual = true)
+        assertTrue(settled(u) is UpdateState.Available)
+        assertEquals(listOf("https://new.invalid/release.json", "https://old.invalid/release.json"), asked)
     }
 
     @Test fun manualCheckReportsUpToDateAndNetworkErrors() {

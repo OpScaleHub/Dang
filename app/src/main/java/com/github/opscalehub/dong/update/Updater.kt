@@ -82,7 +82,8 @@ sealed interface UpdateState {
 class Updater(
     context: Context,
     private val currentCode: Int,
-    private val url: String,
+    /** release.json locations, tried in order until one answers. */
+    private val urls: List<String>,
     private val autoCheckAllowed: Boolean,
     private val fetch: (String) -> String = ::httpGet,
     private val open: (String) -> HttpURLConnection = ::connect,
@@ -119,15 +120,23 @@ class Updater(
         job = scope.launch {
             _state.value = UpdateState.Checking
             _state.value = try {
-                val info = UpdatePolicy.parse(fetch(url))
+                val info = UpdatePolicy.parse(fetchFirst())
                 prefs.edit().putLong(KEY_LAST, System.currentTimeMillis()).apply()
                 if (UpdatePolicy.offer(info, currentCode, Build.VERSION.SDK_INT, prefs.getInt(KEY_SKIPPED, 0), manual)) UpdateState.Available(info)
                 else if (manual) UpdateState.UpToDate else UpdateState.Idle
             } catch (e: Exception) {
-                Log.i("Dong", "update check failed: ${e.javaClass.simpleName}")
+                Log.i("Dang", "update check failed: ${e.javaClass.simpleName}")
                 if (manual) UpdateState.Failed(UpdateState.Reason.NETWORK, null) else UpdateState.Idle
             }
         }
+    }
+
+    private fun fetchFirst(): String {
+        var last: Exception? = null
+        for (u in urls) {
+            try { return fetch(u) } catch (e: Exception) { last = e }
+        }
+        throw last ?: IllegalStateException("no update url")
     }
 
     fun later() { _dismissed.value = true }
@@ -148,7 +157,7 @@ class Updater(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 UpdateState.Available(info)
             } catch (e: Exception) {
-                Log.i("Dong", "update download failed: ${e.javaClass.simpleName}")
+                Log.i("Dang", "update download failed: ${e.javaClass.simpleName}")
                 UpdateState.Failed(UpdateState.Reason.NETWORK, info)
             }
         }
@@ -217,7 +226,7 @@ class Updater(
                     s.commit(pi.intentSender)
                 }
             } catch (e: Exception) {
-                Log.i("Dong", "update install failed: ${e.javaClass.simpleName}")
+                Log.i("Dang", "update install failed: ${e.javaClass.simpleName}")
                 _state.value = UpdateState.Failed(UpdateState.Reason.STORAGE, ready.info)
             }
         }

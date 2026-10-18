@@ -8,7 +8,7 @@
    backup is a superset); the only options are skip or replace.
 2. **File sharing is not synchronization.** Exporting the workbook or a
    backup to Google Drive does not keep phones in sync.
-3. **No import of spreadsheets or bank statements.** Only Dong backup files
+3. **No import of spreadsheets or bank statements.** Only Dang backup files
    can be imported (by design: smaller attack surface, no macros).
 4. **Payments are balance-forward.** A payment reduces the unit's balance; it
    is not matched to individual charges.

@@ -206,8 +206,8 @@ fun ReportsScreen(vm: AppViewModel, @Suppress("UNUSED_PARAMETER") nav: NavContro
         }
         item {
             SectionCard(S.reports, subtitle = S.exportNote) {
-                Button(onClick = { xlsx.launch("dong-${Fmt.date(vm.today, building.calendar, persian = false).replace('/', '-')}.xlsx") }, Modifier.fillMaxWidth()) { Text(S.exportXlsx) }
-                OutlinedButton(onClick = { csv.launch("dong-journal.csv") }, Modifier.fillMaxWidth()) { Text(S.exportCsv) }
+                Button(onClick = { xlsx.launch("dang-${Fmt.date(vm.today, building.calendar, persian = false).replace('/', '-')}.xlsx") }, Modifier.fillMaxWidth()) { Text(S.exportXlsx) }
+                OutlinedButton(onClick = { csv.launch("dang-journal.csv") }, Modifier.fillMaxWidth()) { Text(S.exportCsv) }
             }
         }
     }
