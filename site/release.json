@@ -2,8 +2,8 @@
   "version": "0.2.0",
   "date": "2026-10-18",
   "dateJalali": "1405/07/26",
-  "sizeBytes": 0,
-  "sha256": "",
+  "sizeBytes": 7573485,
+  "sha256": "ac5eb001d31a403b5a0e60e77977f5807ec08aafb92fe1059f2612e60464b000",
   "apk": "https://github.com/OpScaleHub/Dong/releases/latest/download/dong.apk",
-  "notes": "https://github.com/OpScaleHub/Dong/releases/latest"
+  "notes": "https://github.com/OpScaleHub/Dong/releases/tag/v0.2.0"
 }
