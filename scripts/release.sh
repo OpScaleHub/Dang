@@ -81,7 +81,7 @@ cp "$APK" "$OUT/dong.apk"; cp "$APK" "$OUT/dong-$next.apk"
 SHA=$(sha256sum "$OUT/dong.apk" | cut -d' ' -f1)
 SIZE=$(stat -c %s "$OUT/dong.apk")
 APKSIGNER=$(ls -d "${ANDROID_HOME:-$HOME/Android/Sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)
-[ -n "$APKSIGNER" ] && "$APKSIGNER" verify "$OUT/dong.apk" || echo "(apksigner not found; skipped signature check)"
+if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs "$OUT/dong.apk" | grep -m1 "certificate DN"; else echo "(apksigner not found; skipped signature check)"; fi
 
 # ---- landing-page metadata + notes ------------------------------------------
 python3 - "$next" "$SIZE" "$SHA" <<'PY'
@@ -115,12 +115,12 @@ RANGE=${PREV:+$PREV..}HEAD
   echo
   echo "**دریافت:** \`dong.apk\` (اندروید ۸ و بالاتر)"
   echo
-  section() { local t=$1 p=$2 l; l=$(git log --no-merges --format='- %s' "$RANGE" | grep -E "^- $p(\(|:)" | sed -E "s/^- $p(\([^)]*\))?: /- /" || true); [ -n "$l" ] && printf '### %s\n%s\n\n' "$t" "$l"; }
+  section() { local t=$1 p=$2 l; l=$(git log --no-merges --format='- %s' "$RANGE" | grep -E "^- $p(\(|:)" | sed -E "s/^- $p(\([^)]*\))?: /- /" || true); if [ -n "$l" ]; then printf '### %s\n%s\n\n' "$t" "$l"; fi; }
   section "Features" feat
   section "Fixes" fix
   section "Performance" perf
   other=$(git log --no-merges --format='- %s' "$RANGE" | grep -vE '^- (feat|fix|perf|chore\(release\))(\(|:)' || true)
-  [ -n "$other" ] && printf '### Other\n%s\n\n' "$other"
+  if [ -n "$other" ]; then printf '### Other\n%s\n\n' "$other"; fi
   echo "SHA-256 (\`dong.apk\`): \`$SHA\`"
 } > "$OUT/notes.md"
 
