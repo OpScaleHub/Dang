@@ -129,3 +129,14 @@ nothing else on the phone was touched.
 8. Corrections could move finalized charges after a unit was deactivated.
 9. A new meter's first reading blocked its first period.
 10. Supplier payments against credit notes were accepted.
+
+## In-app updater (0.3.0)
+
+| Check | Result |
+|---|---|
+| `UpdaterTest` (Robolectric): parsing, newer/minSdk/checksum/url rules, skip vs manual, daily throttle, silent auto-check errors, off switch | 7/7 pass (suite: 123 tests) |
+| Instrumented E2E on the emulator with the update card in place | 1/1 pass |
+| Emulator, local server: debug 0.2.0 (code 2) finds 0.3.0, downloads with progress, opens "install unknown apps" once, resumes, system "update this app?" → installed code 3, data kept | OK |
+| Tampered release (wrong SHA-256) offered from Settings | refused with «فایل دریافت‌شده سالم نبود…», partial file deleted |
+| Production: release-signed 0.2.0 build on the emulator → finds v0.3.0 on GitHub Pages, downloads the pinned GitHub Release asset, installs | OK, no crashes |
+| Release APK permissions | INTERNET, REQUEST_INSTALL_PACKAGES, AndroidX private receiver permission |
