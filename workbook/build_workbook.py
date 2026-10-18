@@ -719,7 +719,7 @@ def build(out):
     inp(O, "B7", OPENING["payable"], MONEY)
     O["A8"] = "مانده افتتاحیه صندوق عملیاتی (محاسبه‌شده)"
     calc(O, "B8", f"=B5+SUM(B11:B{10 + len(UNITS)})-B7-B6", MONEY)
-    O["B8"].comment = Comment("نقد + مطالبات − بدهی‌ها − اندوخته", "Dong")
+    O["B8"].comment = Comment("نقد + مطالبات − بدهی‌ها − اندوخته", "Dang")
     O["A10"] = "مانده افتتاحیه واحدها"
     O["A10"].font = Font(name=FONT, bold=True)
     for i, uid in enumerate(UNIT_IDS):

@@ -6,7 +6,7 @@ common cost", which is exactly what the app computes.
 
 ## 1. Starting point
 
-- The repository (`OpScaleHub/Dong`) was empty. No existing conventions to
+- The repository (`OpScaleHub/Dong`, since renamed `OpScaleHub/Dang`) was empty. No existing conventions to
   preserve inside the repo; the build conventions (version catalog, Kotlin DSL,
   `com.github.opscalehub.*` namespace, JDK 17, compileSdk 35) follow the owner's
   sibling Android projects.

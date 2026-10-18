@@ -132,7 +132,7 @@ License 1.1 (see `licenses/Vazirmatn-OFL.txt`).
 
 ## Landing page and releases
 
-- Landing page: <https://opscalehub.github.io/Dong/> (static files in `site/`,
+- Landing page: <https://opscalehub.github.io/Dang/> (static files in `site/`,
   deployed by `.github/workflows/pages.yml` on every push to `main` that touches `site/`).
 - Releases are cut locally, no CI build:
 

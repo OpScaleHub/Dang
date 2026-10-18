@@ -140,3 +140,14 @@ nothing else on the phone was touched.
 | Tampered release (wrong SHA-256) offered from Settings | refused with «فایل دریافت‌شده سالم نبود…», partial file deleted |
 | Production: release-signed 0.2.0 build on the emulator → finds v0.3.0 on GitHub Pages, downloads the pinned GitHub Release asset, installs | OK, no crashes |
 | Release APK permissions | INTERNET, REQUEST_INSTALL_PACKAGES, AndroidX private receiver permission |
+
+## 0.3.1 — sent-bill tracking, month summary image, Dang branding
+
+| Check | Result |
+|---|---|
+| Unit + Robolectric (`./gradlew testDebugUnitTest`) incl. `BillsTest` (mark sent / progress / closed-month-only / bill adds up / summary totals and debt opt-in / backup round-trip), `MigrationTest` 3→4, updater address fallback | 130 tests, 0 failures |
+| Instrumented E2E on the emulator, now also Home step 4 (mark a bill sent, «۱ از N») and step 5 (debtors list) | 1/1 pass |
+| Workbook (`workbook/verify_workbook.py`) after regenerating as `Dang-accounting-prototype.xlsx` | 8776 cells, 0 formula errors, 42/42 checks |
+| Emulator by hand: share sheet → app picked → counted as sent; dismissed → not counted; «علامت ارسال»; month summary image rendered | OK |
+| Audit finding fixed: the bill image did not list credits/adjustments or later-month charges, so its lines did not add up to the amount due | fixed, covered by `BillsTest` |
+| Release v0.3.1 built, signed with the existing key, published; installed on the OnePlus Nord over Wi-Fi from the public asset (checksum verified, data kept) | OK |

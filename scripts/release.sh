@@ -9,7 +9,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-REPO=OpScaleHub/Dong
+REPO=OpScaleHub/Dang
 BUMP=patch DRY=0 TESTS=1
 for a in "$@"; do
   case "$a" in
@@ -104,10 +104,10 @@ json.dump({
   "version": v, "versionCode": code, "minSdk": min_sdk,
   "date": d.isoformat(), "dateJalali": jalali(d),
   "sizeBytes": size, "sha256": sha,
-  "apk": "https://github.com/OpScaleHub/Dong/releases/latest/download/dang.apk",
+  "apk": "https://github.com/OpScaleHub/Dang/releases/latest/download/dang.apk",
   # Read by the in-app updater (update/Updater.kt): fixed to this version's file.
-  "apkPinned": f"https://github.com/OpScaleHub/Dong/releases/download/v{v}/dang-{v}.apk",
-  "notes": f"https://github.com/OpScaleHub/Dong/releases/tag/v{v}",
+  "apkPinned": f"https://github.com/OpScaleHub/Dang/releases/download/v{v}/dang-{v}.apk",
+  "notes": f"https://github.com/OpScaleHub/Dang/releases/tag/v{v}",
 }, open("site/release.json", "w"), indent=2, ensure_ascii=False)
 open("site/release.json", "a").write("\n")
 PY
@@ -143,4 +143,4 @@ gh release create "$TAG" "$OUT/dang.apk" "$OUT/dang-$next.apk" \
   --repo "$REPO" --title "دنگ $next" --notes-file "$OUT/notes.md" --latest
 
 say "Done: https://github.com/$REPO/releases/tag/$TAG"
-echo "Landing page updates via GitHub Pages in a minute: https://opscalehub.github.io/Dong/"
+echo "Landing page updates via GitHub Pages in a minute: https://opscalehub.github.io/Dang/"
