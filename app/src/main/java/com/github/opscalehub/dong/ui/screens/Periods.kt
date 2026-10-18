@@ -145,10 +145,12 @@ fun PeriodScreen(vm: AppViewModel, nav: NavController, periodId: String) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!finalized) {
                         Button(onClick = { confirmFinalize = true }, enabled = result?.canFinalize == true) { Text(S.finalize) }
-                        OutlinedButton(onClick = { confirmDelete = true }) { Text(S.deleteDraft) }
                     }
                     OutlinedButton(onClick = { exportHtml.launch("statement-${p.name}.html") }) { Text(S.exportStatement) }
                 }
+                if (!finalized && result?.canFinalize == false) Hint(S.cannotCloseYet, MaterialTheme.colorScheme.error)
+                // Deleting the month is rare and destructive: a quiet text button, not a peer of «بستن ماه».
+                if (!finalized) TextButton(onClick = { confirmDelete = true }) { Text(S.deleteDraft, color = MaterialTheme.colorScheme.error) }
                 if (finalized) {
                     Button(onClick = { nav.navigate(com.github.opscalehub.dong.ui.Routes.send(p.id)) }, Modifier.fillMaxWidth()) { Text(S.sendBills) }
                     SummaryShareButton(vm, building, p)
@@ -161,10 +163,7 @@ fun PeriodScreen(vm: AppViewModel, nav: NavController, periodId: String) {
                 SectionCard(S.issues) {
                     val shown = r.issues.filter { it.severity != Severity.INFO || it.code.name.startsWith("UNALLOCATED") || it.code.name.startsWith("FUND_BORNE") }
                     if (!finalized && r.issues.none { it.blocking }) Hint(S.noIssues, MaterialTheme.colorScheme.primary)
-                    shown.sortedBy { it.severity }.forEach { i ->
-                        Text("${Fa.severity(i.severity)}: ${Fa.issue(i, names)}", style = MaterialTheme.typography.bodySmall,
-                            color = when (i.severity) { Severity.ERROR -> MaterialTheme.colorScheme.error; Severity.WARNING -> MaterialTheme.colorScheme.tertiary; Severity.INFO -> MaterialTheme.colorScheme.onSurfaceVariant })
-                    }
+                    IssueList(shown, names, onReadings = if (finalized) null else { { nav.navigate(com.github.opscalehub.dong.ui.Routes.READINGS) } })
                 }
             }
             item {

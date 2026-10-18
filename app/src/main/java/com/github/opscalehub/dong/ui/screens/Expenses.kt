@@ -29,6 +29,8 @@ import com.github.opscalehub.dong.data.db.FundEntity
 import com.github.opscalehub.dong.data.db.FundKind
 import com.github.opscalehub.dong.data.db.PeriodEntity
 import com.github.opscalehub.dong.data.db.PeriodStatus
+import com.github.opscalehub.dong.ui.EmptyState
+import com.github.opscalehub.dong.ui.SectionTitle
 import com.github.opscalehub.dong.data.db.SupplierEntity
 import com.github.opscalehub.dong.data.db.WaterTariffEntity
 import com.github.opscalehub.dong.data.newId
@@ -84,19 +86,29 @@ fun ExpensesScreen(vm: AppViewModel, nav: NavController) {
                     }
                 }
             }
-            if (expenses.isEmpty()) item { SectionCard { Hint(S.empty) } }
-            items(expenses.size) { i ->
-                val e = expenses[i]
-                val p = paid?.get(e.id) ?: 0
-                SectionCard {
-                    ClickRow({ nav.navigate(Routes.expense(e.id)) }) {
-                        Column(Modifier.weight(1f)) {
-                            Text(e.description, style = MaterialTheme.typography.titleMedium)
-                            Hint("${Fmt.date(e.date, building.calendar)}، ${categories.firstOrNull { it.id == e.categoryId }?.name ?: ""}، ${periods.firstOrNull { it.id == e.periodId }?.name ?: S.noPeriodAssigned}")
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text(money(e.amountMinor), style = MaterialTheme.typography.titleSmall)
-                            Hint(paymentStatus(e, p))
+            if (expenses.isEmpty()) item { EmptyState(S.empty, S.expensesEmptyHint, S.newExpense) { nav.navigate(Routes.expense("new")) } }
+            // Grouped by month, newest first, so it is obvious which bills are already settled in a closed month.
+            val groups = expenses.groupBy { it.periodId }.entries.sortedByDescending { (pid, l) -> periods.firstOrNull { it.id == pid }?.startDate ?: l.maxOf { it.date } }
+            groups.forEach { (pid, list) ->
+                val per = periods.firstOrNull { it.id == pid }
+                item {
+                    val closed = per?.status == PeriodStatus.FINALIZED
+                    SectionTitle((per?.name ?: S.noPeriodAssigned) + if (closed) " — ${S.closedMonth}" else "")
+                    if (closed) Hint(S.closedMonthExpensesHint)
+                }
+                items(list.size) { i ->
+                    val e = list[i]
+                    val p = paid?.get(e.id) ?: 0
+                    SectionCard {
+                        ClickRow({ nav.navigate(Routes.expense(e.id)) }) {
+                            Column(Modifier.weight(1f)) {
+                                Text(e.description, style = MaterialTheme.typography.titleMedium)
+                                Hint("${Fmt.date(e.date, building.calendar)}، ${categories.firstOrNull { it.id == e.categoryId }?.name ?: ""}")
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(money(e.amountMinor), style = MaterialTheme.typography.titleSmall)
+                                Hint(paymentStatus(e, p), if (e.status == ExpenseStatus.ACTIVE && p < e.amountMinor) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
@@ -107,9 +119,9 @@ fun ExpensesScreen(vm: AppViewModel, nav: NavController) {
 
 fun paymentStatus(e: ExpenseEntity, paid: Long) = when {
     e.status == ExpenseStatus.VOIDED -> S.voided
-    paid == 0L -> S.unpaid
-    paid < e.amountMinor -> S.partiallyPaid
-    else -> S.fullyPaid
+    paid == 0L -> S.supplierUnpaid
+    paid < e.amountMinor -> S.supplierPartly
+    else -> S.supplierPaid
 }
 
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
@@ -169,23 +181,31 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
     val pol = policy.toPolicy()
     val valid = date.value != null && description.isNotBlank() && category != null && (amount.value ?: 0) != 0L && fund != null && pol != null
 
+    if (locked && existing != null) {
+        LockedExpense(vm, existing, period, categories, suppliers, funds, units, paid ?: 0, payments.orEmpty(), onPay = { paying = true })
+        PaySupplierDialog(vm, existing, paying, paid ?: 0, cash, building) { paying = false }
+        return
+    }
+    var details by rememberSaveable { mutableStateOf(existing != null && (existing.supplierId != null || existing.documentRef.isNotBlank() || existing.notes.isNotBlank())) }
     ScreenList {
-        if (locked) item { SectionCard { Hint(if (existing?.status == ExpenseStatus.VOIDED) S.voided else S.lockedByFinalized, MaterialTheme.colorScheme.error) } }
         item {
             SectionCard(if (existing == null) S.newExpense else S.editExpense, subtitle = S.expenseVsPayment) {
-                DateInput(S.date, date, vm.today)
-                TextInput(S.description, description, { description = it }, error = if (description.isBlank()) S.required else null)
                 Dropdown(S.category, categories.filter { it.active || it.id == existing?.categoryId }, category, { category = it }, { it.name })
-                NumberInput(S.amount, amount, supporting = building.currencyName)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Dropdown(S.supplier, listOf<SupplierEntity?>(null) + suppliers, supplier, { supplier = it }, { it?.name ?: S.none }, Modifier.weight(1f))
-                    TextButton(onClick = { addingSupplier = true }) { Text(S.add) }
-                }
-                Dropdown(S.fund, funds, fund, { fund = it }, { it.name })
+                NumberInput(S.amount, amount)
+                TextInput(S.description, description, { description = it }, supporting = S.descriptionHint)
+                DateInput(S.date, date, vm.today)
                 Dropdown(S.period, listOf<PeriodEntity?>(null) + drafts, periodSel, { periodSel = it }, { it?.name ?: S.noPeriodAssigned })
-                TextInput(S.documentRef, docRef, { docRef = it })
-                TextInput(S.notes, notes, { notes = it }, singleLine = false)
                 if (existing == null) SwitchRow(S.paidNow, payNow, { payNow = it })
+                TextButton(onClick = { details = !details }) { Text(if (details) S.fewerDetails else S.moreDetails) }
+                if (details) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Dropdown(S.supplier, listOf<SupplierEntity?>(null) + suppliers, supplier, { supplier = it }, { it?.name ?: S.none }, Modifier.weight(1f))
+                        TextButton(onClick = { addingSupplier = true }) { Text(S.add) }
+                    }
+                    Dropdown(S.fund, funds, fund, { fund = it }, { it.name })
+                    TextInput(S.documentRef, docRef, { docRef = it })
+                    TextInput(S.notes, notes, { notes = it }, singleLine = false)
+                }
             }
         }
         item {
@@ -243,6 +263,13 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
                         if (existing == null) vm.repos.expenses.create(e, if (payNow) cash.firstOrNull()?.id else null) else vm.repos.expenses.update(e)
                     }
                 }, enabled = valid, modifier = Modifier.fillMaxWidth()) { Text(S.save) }
+                if (!valid) {
+                    val missing = listOfNotNull(
+                        S.category.takeIf { category == null }, S.amount.takeIf { (amount.value ?: 0) == 0L },
+                        S.description.takeIf { description.isBlank() }, S.date.takeIf { date.value == null },
+                    )
+                    if (missing.isNotEmpty()) Hint(S.toSaveFill + " " + missing.joinToString("، "))
+                }
             }
         }
         if (existing != null) {
@@ -271,20 +298,8 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
             vm.run(S.done, onSuccess = { voiding = false; nav.popBackStack() }) { vm.repos.expenses.void(existing.id, reason) }
         }
     }
-    if (paying && existing != null) {
-        val amt = rememberMoney(existing.amountMinor - (paid ?: 0))
-        var from by remember { mutableStateOf(cash.firstOrNull()) }
-        val d = rememberDate(vm.today, building.calendar)
-        var ref by rememberSaveable { mutableStateOf("") }
-        FormDialog(S.paySupplier, { paying = false }, {
-            vm.run(S.saved, onSuccess = { paying = false }) { vm.repos.expenses.paySupplier(existing.id, amt.value!!, from!!.id, d.value!!, ref) }
-        }, canConfirm = (amt.value ?: 0) > 0 && from != null && d.value != null) {
-            NumberInput(S.amount, amt)
-            Dropdown(S.payFrom, cash, from, { from = it }, { it.name })
-            DateInput(S.date, d, vm.today)
-            TextInput(S.reference, ref, { ref = it })
-        }
-    }
+    PaySupplierDialog(vm, existing, paying, paid ?: 0, cash, building) { paying = false }
+
 }
 
 @Composable
@@ -406,6 +421,86 @@ fun ChargeItemsScreen(vm: AppViewModel) {
             DateInput(S.effectiveTo, to, vm.today, allowEmpty = true)
             SwitchRow(S.active, active, { active = it })
             PolicyEditor(policy, units, spaces, allowFundOnly = false)
+        }
+    }
+}
+
+@Composable
+private fun PaySupplierDialog(vm: AppViewModel, existing: ExpenseEntity?, open: Boolean, paid: Long,
+                              cash: List<com.github.opscalehub.dong.data.db.CashAccountEntity>,
+                              building: com.github.opscalehub.dong.data.db.BuildingEntity, close: () -> Unit) {
+    if (!open || existing == null) return
+    val amt = rememberMoney(existing.amountMinor - paid)
+    var from by remember { mutableStateOf(cash.firstOrNull()) }
+    val d = rememberDate(vm.today, building.calendar)
+    var ref by rememberSaveable { mutableStateOf("") }
+    FormDialog(S.paySupplier, close, {
+        vm.run(S.saved, onSuccess = close) { vm.repos.expenses.paySupplier(existing.id, amt.value!!, from!!.id, d.value!!, ref) }
+    }, canConfirm = (amt.value ?: 0) > 0 && from != null && d.value != null) {
+        NumberInput(S.amount, amt)
+        Dropdown(S.payFrom, cash, from, { from = it }, { it.name })
+        DateInput(S.date, d, vm.today)
+        TextInput(S.reference, ref, { ref = it })
+    }
+}
+
+/**
+ * An expense of a closed month, or a cancelled one: a summary, not a form. Shows what each unit
+ * was actually charged in that month and the one thing still possible (paying the supplier),
+ * and says how to deal with a mistake instead of letting edits fail on save.
+ */
+@Composable
+private fun LockedExpense(
+    vm: AppViewModel, e: ExpenseEntity, period: PeriodEntity?,
+    categories: List<com.github.opscalehub.dong.data.db.CategoryEntity>, suppliers: List<SupplierEntity>,
+    funds: List<com.github.opscalehub.dong.data.db.FundEntity>, units: List<com.github.opscalehub.dong.data.db.UnitEntity>,
+    paid: Long, payments: List<com.github.opscalehub.dong.data.db.JournalEntryEntity>, onPay: () -> Unit,
+) {
+    val b by vm.building.collectAsState()
+    val building = b ?: return
+    val report by derived(vm, building.id, e.id) { vm.reports.load(building.id) }
+    val voided = e.status == ExpenseStatus.VOIDED
+    ScreenList {
+        item {
+            SectionCard(e.description) {
+                Text(if (voided) S.voidedExpense else "${S.inMonth} ${period?.name ?: ""} — ${S.closedMonth}",
+                    style = MaterialTheme.typography.labelLarge, color = if (voided) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                KeyValue(S.amount, money(e.amountMinor), strong = true)
+                KeyValue(S.category, categories.firstOrNull { it.id == e.categoryId }?.name ?: "—")
+                KeyValue(S.date, Fmt.date(e.date, building.calendar))
+                e.supplierId?.let { id -> KeyValue(S.supplier, suppliers.firstOrNull { it.id == id }?.name ?: "—") }
+                KeyValue(S.fund, funds.firstOrNull { it.id == e.fundId }?.name ?: "—")
+                if (e.documentRef.isNotBlank()) KeyValue(S.documentRef, e.documentRef)
+                if (e.notes.isNotBlank()) Hint(e.notes)
+            }
+        }
+        if (!voided) item {
+            SectionCard(S.lockedWhyTitle) {
+                Text(S.lockedByFinalized, style = MaterialTheme.typography.bodyMedium)
+                Text(S.lockedWhatToDo, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+        if (!voided && period != null) item {
+            val lines = report?.periodResults?.get(period.id)?.lines.orEmpty().filter { it.sourceId == e.id }
+            SectionCard(S.chargedInThatMonth, subtitle = period.name) {
+                if (lines.isEmpty()) Hint(S.fundOnly)
+                else com.github.opscalehub.dong.ui.charts.HBars(
+                    units.filter { u -> lines.any { it.unitId == u.id } }.map { u ->
+                        val v = lines.filter { it.unitId == u.id }.sumOf { it.amount }
+                        com.github.opscalehub.dong.ui.charts.HBar("${S.unit} ${u.label}", v, money(v))
+                    },
+                )
+                val fromFund = e.amountMinor - lines.sumOf { it.amount }
+                if (fromFund > 0) Hint("${S.fundBorne}: ${money(fromFund)}")
+            }
+        }
+        if (!voided) item {
+            SectionCard(S.paySupplier, subtitle = S.paySupplierHint) {
+                KeyValue(S.paid, money(paid))
+                KeyValue(S.outstanding, money(e.amountMinor - paid), strong = true)
+                payments.filter { it.type == EntryType.SUPPLIER_PAYMENT }.forEach { Hint("${Fmt.date(it.entryDate, building.calendar)}، ${it.reference}") }
+                if (paid < e.amountMinor) Button(onClick = onPay, Modifier.fillMaxWidth()) { Text(S.paySupplier) }
+            }
         }
     }
 }

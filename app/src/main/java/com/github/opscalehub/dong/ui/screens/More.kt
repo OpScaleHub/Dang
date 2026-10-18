@@ -39,19 +39,19 @@ fun MoreScreen(nav: NavController) {
     val groups = listOf(
         listOf(
             Entry(S.readingsBatch, S.stepReadings, Icons.Filled.Refresh, Routes.READINGS),
-            Entry(S.monthsAndClosing, S.periods, Icons.Filled.DateRange, Routes.PERIODS),
-            Entry(S.transactions, S.payments, Icons.AutoMirrored.Filled.List, Routes.FINANCE),
+            Entry(S.monthsAndClosing, S.menuMonths, Icons.Filled.DateRange, Routes.PERIODS),
+            Entry(S.transactions, S.menuTransactions, Icons.AutoMirrored.Filled.List, Routes.FINANCE),
         ),
         listOf(
-            Entry(S.metersAndTariffs, S.water, Icons.Filled.Info, Routes.WATER),
-            Entry(S.parking, S.parkingHint, Icons.Filled.Place, Routes.PARKING),
-            Entry(S.categories, S.policyChangeNote, Icons.Filled.ShoppingCart, Routes.CATEGORIES),
-            Entry(S.chargeItems, S.chargeMode, Icons.Filled.AccountBox, Routes.CHARGE_ITEMS),
+            Entry(S.metersAndTariffs, S.menuMeters, Icons.Filled.Info, Routes.WATER),
+            Entry(S.parking, S.menuParking, Icons.Filled.Place, Routes.PARKING),
+            Entry(S.categories, S.menuCategories, Icons.Filled.ShoppingCart, Routes.CATEGORIES),
+            Entry(S.chargeItems, S.menuCharges, Icons.Filled.AccountBox, Routes.CHARGE_ITEMS),
         ),
         listOf(
             Entry(S.buildingsAndSwitch, S.switchBuilding, Icons.Filled.Home, Routes.BUILDINGS),
             Entry(S.settings, S.backupTitle, Icons.Filled.Settings, Routes.SETTINGS),
-            Entry(S.auditLog, S.reverseHint, Icons.Filled.Warning, Routes.AUDIT),
+            Entry(S.auditLog, S.menuAudit, Icons.Filled.Warning, Routes.AUDIT),
         ),
     )
     ScreenList {

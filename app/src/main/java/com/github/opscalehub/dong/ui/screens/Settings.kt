@@ -192,16 +192,21 @@ private fun BuildingSettingsCard(vm: AppViewModel) {
     SectionCard(S.buildingSettings, subtitle = S.settingsNote) {
         TextInput(S.buildingName, name, { name = it })
         TextInput(S.address, address, { address = it })
-        TextInput(S.currencyCode, currencyCode, { currencyCode = it })
-        TextInput(S.currencyName, currencyName, { currencyName = it })
-        NumberInput(S.minorDigits, digits)
-        NumberInput(S.roundingIncrement, rounding, supporting = S.roundingHint)
         Text(S.displayCurrency, style = MaterialTheme.typography.labelMedium)
         SingleChoice(listOf(true, false), toman, { toman = it }) { if (it) S.showToman else S.showRial }
-        Text(S.occupancyBasis, style = MaterialTheme.typography.labelMedium)
-        SingleChoice(OccupancyBasis.entries, occ, { occ = it }) { Fa.occupancyBasis(it) }
         Text(S.calendar, style = MaterialTheme.typography.labelMedium)
         SingleChoice(CalendarSystem.entries, cal, { cal = it }) { Fa.calendar(it) }
+        // Set once, usually never touched: kept out of the way.
+        var advanced by rememberSaveable { mutableStateOf(false) }
+        androidx.compose.material3.TextButton(onClick = { advanced = !advanced }) { Text(S.advanced) }
+        if (advanced) {
+            Text(S.occupancyBasis, style = MaterialTheme.typography.labelMedium)
+            SingleChoice(OccupancyBasis.entries, occ, { occ = it }) { Fa.occupancyBasis(it) }
+            NumberInput(S.roundingIncrement, rounding, supporting = S.roundingHint)
+            TextInput(S.currencyName, currencyName, { currencyName = it })
+            TextInput(S.currencyCode, currencyCode, { currencyCode = it })
+            NumberInput(S.minorDigits, digits)
+        }
         Button(onClick = {
             vm.run(S.saved) {
                 vm.repos.buildings.updateSettings(building.copy(name = name.trim(), address = address.trim(), currencyCode = currencyCode.trim(),

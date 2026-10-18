@@ -29,15 +29,15 @@ object Fa {
     fun entryType(t: EntryType) = when (t) {
         EntryType.OPENING -> "مانده افتتاحیه"
         EntryType.EXPENSE -> "ثبت هزینه"
-        EntryType.SUPPLIER_PAYMENT -> "پرداخت به تامین‌کننده"
-        EntryType.CHARGE -> "شارژ دوره"
+        EntryType.SUPPLIER_PAYMENT -> "پرداخت به فروشنده"
+        EntryType.CHARGE -> "شارژ ماه"
         EntryType.RESIDENT_PAYMENT -> "دریافت از واحد"
         EntryType.REFUND -> "استرداد وجه"
-        EntryType.ADJUSTMENT -> "تعدیل"
+        EntryType.ADJUSTMENT -> "اصلاح حساب واحد"
         EntryType.FUND_TRANSFER -> "انتقال بین صندوق‌ها"
         EntryType.CASH_TRANSFER -> "انتقال وجه نقد"
-        EntryType.PERIOD_CORRECTION -> "اصلاحیه دوره"
-        EntryType.REVERSAL -> "برگشت سند"
+        EntryType.PERIOD_CORRECTION -> "اصلاحیه ماه"
+        EntryType.REVERSAL -> "برگشت تراکنش"
     }
 
     fun account(a: AccountKind) = when (a) {
@@ -106,9 +106,9 @@ object Fa {
     }
 
     fun occupancyBasis(b: OccupancyBasis) = when (b) {
-        OccupancyBasis.DAY_WEIGHTED -> "نفر-روز (تغییرات میان دوره لحاظ می‌شود)"
-        OccupancyBasis.PERIOD_START -> "تعداد ساکنان در روز اول دوره"
-        OccupancyBasis.PERIOD_END -> "تعداد ساکنان در روز آخر دوره"
+        OccupancyBasis.DAY_WEIGHTED -> "به نسبت روزهای سکونت (تغییرات وسط ماه هم حساب می‌شود)"
+        OccupancyBasis.PERIOD_START -> "تعداد ساکنان در روز اول ماه"
+        OccupancyBasis.PERIOD_END -> "تعداد ساکنان در روز آخر ماه"
     }
 
     fun calendar(c: CalendarSystem) = when (c) {
@@ -142,8 +142,8 @@ object Fa {
     }
 
     fun severity(s: Severity) = when (s) {
-        Severity.ERROR -> "خطا"
-        Severity.WARNING -> "هشدار"
+        Severity.ERROR -> "باید رفع شود"
+        Severity.WARNING -> "توجه"
         Severity.INFO -> "توضیح"
     }
 
@@ -176,8 +176,8 @@ object Fa {
             IssueCode.UNIT_ZERO_WEIGHT -> "سهم واحد ${n.unit(i.unitId)} صفر است (مبنا صفر)."
             IssueCode.FUND_BORNE_PORTION -> "مبلغ ${Fmt.money(a["amount"]?.toLong() ?: 0)} از محل صندوق پرداخت می‌شود و به واحدها شارژ نمی‌شود."
             IssueCode.MISSING_READING -> "برای ${n.meter(i.meterId)} هیچ قرائتی ثبت نشده است."
-            IssueCode.MISSING_OPENING_READING -> "قرائت ابتدای دوره برای ${n.meter(i.meterId)} وجود ندارد (قرائت قبل از دوره یا «قرائت اولیه» لازم است)."
-            IssueCode.MISSING_CLOSING_READING -> "قرائت پایان دوره برای ${n.meter(i.meterId)} ثبت نشده است."
+            IssueCode.MISSING_OPENING_READING -> "قرائت ابتدای ماه برای ${n.meter(i.meterId)} وجود ندارد (یک قرائت قبل از این ماه یا «قرائت اولیه» لازم است)."
+            IssueCode.MISSING_CLOSING_READING -> "قرائت پایان ماه برای ${n.meter(i.meterId)} ثبت نشده است."
             IssueCode.NEGATIVE_CONSUMPTION -> "قرائت ${n.meter(i.meterId)} از قرائت قبلی کمتر است (${Fmt.cubicMeters(a["current"]?.toLong() ?: 0)} < ${Fmt.cubicMeters(a["previous"]?.toLong() ?: 0)}). اگر کنتور تعویض یا صفر شده یا گردش کرده، نوع قرائت را مشخص کنید."
             IssueCode.ROLLOVER_WITHOUT_LIMIT -> "برای ${n.meter(i.meterId)} گردش کنتور ثبت شده ولی حداکثر شمارنده تعریف نشده است."
             IssueCode.READING_AFTER_FINAL -> "پس از قرائت نهایی ${n.meter(i.meterId)} قرائت دیگری ثبت شده است."
@@ -186,24 +186,24 @@ object Fa {
             IssueCode.NO_MAIN_METER -> "کنتور اصلی تعریف نشده؛ تطبیق مصرف ممکن نیست."
             IssueCode.UNIT_WITHOUT_METER -> "واحد ${n.unit(i.unitId)} کنتور ندارد."
             IssueCode.DOUBLE_WATER_CHARGE -> "این قبض آب به واحدها تسهیم می‌شود در حالی که شارژ تعرفه آب هم فعال است؛ این باعث دوبار دریافت هزینه آب می‌شود. قبض را «از محل صندوق» ثبت کنید."
-            IssueCode.NO_TARIFF -> "هیچ تعرفه آبی برای این دوره تعریف نشده است."
+            IssueCode.NO_TARIFF -> "هیچ تعرفه آبی برای این ماه تعریف نشده است."
             IssueCode.INVALID_TARIFF -> "تعرفه آب نامعتبر است."
-            IssueCode.EMPTY_PERIOD -> "این دوره هیچ هزینه یا قلم شارژی ندارد."
-            IssueCode.INVALID_PERIOD_DATES -> "تاریخ پایان دوره قبل از تاریخ شروع است."
+            IssueCode.EMPTY_PERIOD -> "این ماه هیچ هزینه یا شارژ ثابتی ندارد."
+            IssueCode.INVALID_PERIOD_DATES -> "تاریخ پایان ماه قبل از تاریخ شروع است."
         }
     }
 
     /** Audit action codes are stable machine identifiers; this maps them for display. */
     fun auditAction(code: String): String = when {
-        code.startsWith("POST_") -> runCatching { "ثبت سند: " + entryType(EntryType.valueOf(code.removePrefix("POST_"))) }.getOrDefault(code)
+        code.startsWith("POST_") -> runCatching { "" + entryType(EntryType.valueOf(code.removePrefix("POST_"))) }.getOrDefault(code)
         code.startsWith("RESTORE_") -> "بازیابی از پشتیبان"
         else -> mapOf(
             "CREATE_BUILDING" to "ایجاد ساختمان", "UPDATE_SETTINGS" to "تغییر تنظیمات", "CREATE_UNIT" to "ایجاد واحد", "UPDATE_UNIT" to "ویرایش واحد",
             "SET_OCCUPANCY" to "تغییر تعداد ساکنان", "DELETE_OCCUPANCY" to "حذف سابقه سکونت", "SAVE_PARKING_SPACE" to "ثبت جای پارک",
             "ASSIGN_PARKING" to "تخصیص پارکینگ", "SAVE_METER" to "ثبت کنتور", "ADD_READING" to "ثبت قرائت", "CORRECT_READING" to "اصلاح قرائت",
             "DELETE_READING" to "حذف قرائت", "REPLACE_METER" to "تعویض کنتور", "SAVE_TARIFF" to "ثبت تعرفه", "SAVE_CATEGORY" to "ثبت دسته هزینه",
-            "UPDATE_EXPENSE" to "ویرایش هزینه", "VOID_EXPENSE" to "ابطال هزینه", "SAVE_CHARGE_ITEM" to "ثبت قلم شارژ", "CREATE_PERIOD" to "ایجاد دوره",
-            "DELETE_PERIOD" to "حذف دوره", "FINALIZE_PERIOD" to "قطعی کردن دوره", "CORRECT_PERIOD" to "اصلاحیه دوره", "ADD_FUND" to "ایجاد صندوق",
+            "UPDATE_EXPENSE" to "ویرایش هزینه", "VOID_EXPENSE" to "ابطال هزینه", "SAVE_CHARGE_ITEM" to "ثبت شارژ ثابت", "CREATE_PERIOD" to "ساختن ماه",
+            "DELETE_PERIOD" to "حذف ماه", "FINALIZE_PERIOD" to "بستن ماه", "CORRECT_PERIOD" to "اصلاحیه ماه", "ADD_FUND" to "ایجاد صندوق",
             "ADD_CASH_ACCOUNT" to "ایجاد حساب نقد", "DEMO_DATA" to "بارگذاری داده نمایشی",
         )[code] ?: code
     }
@@ -213,16 +213,16 @@ object Fa {
         OpError.INVALID_AMOUNT -> "مبلغ نامعتبر است."
         OpError.INVALID_INPUT -> "اطلاعات واردشده نامعتبر یا ناقص است."
         OpError.REASON_REQUIRED -> "ذکر دلیل الزامی است."
-        OpError.PERIOD_FINALIZED -> "این دوره قطعی شده و قابل تغییر نیست. برای اصلاح از «اصلاحیه» یا «تعدیل» استفاده کنید."
-        OpError.PERIOD_OVERLAP -> "این دوره با دوره دیگری همپوشانی دارد."
-        OpError.PERIOD_HAS_BLOCKING_ISSUES -> "دوره خطای حل‌نشده دارد و قطعی نمی‌شود."
-        OpError.PERIOD_NOT_FINALIZED -> "این دوره هنوز قطعی نشده است."
+        OpError.PERIOD_FINALIZED -> "این ماه بسته شده و دیگر قابل تغییر نیست. اگر مبلغی اشتباه بوده، اختلاف را در ماه جاری ثبت کنید؛ برای حساب یک واحد، «اصلاح حساب واحد» را در «همه تراکنش‌ها» بزنید."
+        OpError.PERIOD_OVERLAP -> "تاریخ‌های این ماه با ماه دیگری تداخل دارد."
+        OpError.PERIOD_HAS_BLOCKING_ISSUES -> "هنوز مواردی باید رفع شود؛ فهرستشان را در صفحه این ماه ببینید."
+        OpError.PERIOD_NOT_FINALIZED -> "این ماه هنوز بسته نشده است."
         OpError.NOTHING_TO_CORRECT -> "محاسبه مجدد با نتیجه فعلی تفاوتی ندارد."
-        OpError.LOCKED_BY_FINALIZED_PERIOD -> "این تاریخ در یک دوره قطعی‌شده است. از «اصلاح قرائت» استفاده کنید."
-        OpError.ALREADY_REVERSED -> "این سند قبلاً برگشت خورده است."
-        OpError.CANNOT_REVERSE -> "این نوع سند مستقیماً قابل برگشت نیست."
+        OpError.LOCKED_BY_FINALIZED_PERIOD -> "این تاریخ در ماهی است که بسته شده. تاریخی در ماه جاری انتخاب کنید؛ اگر قرائتِ قبلی اشتباه بوده، در صفحه همان کنتور «اصلاح قرائت» را بزنید."
+        OpError.ALREADY_REVERSED -> "این تراکنش قبلاً برگشت خورده است."
+        OpError.CANNOT_REVERSE -> "این نوع تراکنش را نمی‌شود مستقیم برگشت زد."
         OpError.HAS_PAYMENTS -> "ابتدا پرداخت‌های مرتبط را برگشت بزنید."
         OpError.OPENING_EXISTS -> "مانده افتتاحیه قبلاً ثبت شده است."
-        OpError.NOT_BALANCED -> "سند تراز نیست."
+        OpError.NOT_BALANCED -> "جمع بدهکار و بستانکار این تراکنش برابر نیست."
     }
 }

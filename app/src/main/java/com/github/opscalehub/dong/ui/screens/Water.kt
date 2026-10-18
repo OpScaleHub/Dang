@@ -73,7 +73,7 @@ fun WaterScreen(vm: AppViewModel, nav: NavController) {
                         KeyValue(S.mainConsumption, w.mainLiters?.let { "${Fmt.cubicMeters(it)} ${S.m3}" } ?: S.none)
                         KeyValue(S.unitsConsumption, "${Fmt.cubicMeters(w.unitSumLiters)} ${S.m3}")
                         KeyValue(S.unallocated, w.unallocatedLiters?.let { "${Fmt.cubicMeters(it)} ${S.m3}" } ?: S.none, strong = true)
-                        w.issues.filter { it.blocking }.take(6).forEach { Hint("• " + Fa.issue(it, vm.names()), MaterialTheme.colorScheme.error) }
+                        IssueList(w.issues.filter { it.blocking }, vm.names())
                     }
                 }
             }
