@@ -212,6 +212,17 @@ interface FinanceDao {
 
 @Dao
 interface PeriodDao {
+    @Insert suspend fun insertShare(s: BillShareEntity)
+
+    @Query("DELETE FROM bill_shares WHERE periodId = :p AND unitId = :u")
+    suspend fun deleteShares(p: String, u: String)
+
+    @Query("SELECT * FROM bill_shares WHERE buildingId = :b ORDER BY at")
+    fun observeShares(b: String): Flow<List<BillShareEntity>>
+
+    @Query("SELECT * FROM bill_shares WHERE buildingId = :b ORDER BY at")
+    suspend fun shares(b: String): List<BillShareEntity>
+
     @Query("SELECT * FROM periods WHERE buildingId = :b ORDER BY startDate DESC")
     fun observePeriods(b: String): Flow<List<PeriodEntity>>
 
@@ -261,4 +272,5 @@ interface RestoreDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun entries(x: List<JournalEntryEntity>): List<Long>
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun lines(x: List<JournalLineEntity>): List<Long>
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun audit(x: List<AuditEventEntity>): List<Long>
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun billShares(x: List<BillShareEntity>): List<Long>
 }

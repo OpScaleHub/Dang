@@ -51,7 +51,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val changes: StateFlow<Long> = _changes.asStateFlow()
     private val observer = object : InvalidationTracker.Observer(arrayOf("buildings", "units", "occupancy", "parking_spaces", "parking_assignments",
         "meters", "meter_readings", "categories", "suppliers", "funds", "cash_accounts", "expenses", "charge_items", "water_tariffs",
-        "periods", "period_revisions", "journal_entries", "journal_lines")) {
+        "periods", "period_revisions", "journal_entries", "journal_lines", "bill_shares")) {
         override fun onInvalidated(tables: Set<String>) {
             _changes.value = _changes.value + 1
         }
@@ -96,6 +96,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val periods = per { db.periodDao().observePeriods(it) }
     val entries = per { db.financeDao().observeEntries(it) }
     val audit = per { db.financeDao().observeAudit(it) }
+    val billShares = per { db.periodDao().observeShares(it) }
 
     /** Draft period containing [today], else the most recent draft, else the most recent period. */
     fun currentPeriod(list: List<PeriodEntity>, today: Long): PeriodEntity? =

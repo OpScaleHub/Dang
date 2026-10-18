@@ -16,7 +16,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import com.github.opscalehub.dong.data.Insights
 import com.github.opscalehub.dong.data.db.PeriodStatus
-import com.github.opscalehub.dong.share.Bill
 import com.github.opscalehub.dong.share.BillShare
 import com.github.opscalehub.dong.ui.EmptyState
 import com.github.opscalehub.dong.ui.LocalMoney
@@ -85,21 +84,31 @@ private enum class UnitFilter { ALL, OWES, SETTLED }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun UnitsScreen(vm: AppViewModel, nav: NavController) {
+fun UnitsScreen(vm: AppViewModel, nav: NavController, collect: Boolean = false) {
     val b by vm.building.collectAsState()
     val building = b ?: return
     val units by vm.units.collectAsState()
     val occ by vm.occupancy.collectAsState()
     val report by derived(vm, building.id) { vm.reports.load(building.id) }
     var adding by remember { mutableStateOf(false) }
-    var filter by remember { mutableStateOf(UnitFilter.ALL) }
+    var filter by remember { mutableStateOf(if (collect) UnitFilter.OWES else UnitFilter.ALL) }
+    var paying by remember { mutableStateOf<UnitEntity?>(null) }
+    var payingAny by remember { mutableStateOf(false) }
     val current = currentOccupants(occ, vm.today)
     val balances = report?.balances?.units.orEmpty()
     val viz = LocalViz.current
 
-    WithFab(S.newUnit, { adding = true }) {
+    WithFab(if (collect) S.payNow else S.newUnit, { if (collect) payingAny = true else adding = true }) {
         ScreenList {
-            item {
+            if (collect) item {
+                val d = report ?: return@item
+                val c = d.periods.filter { it.status == PeriodStatus.FINALIZED }.maxByOrNull { it.endDate }?.let { Insights.collection(d, it.id) }
+                SectionCard(S.collectTitle, subtitle = S.collectHint) {
+                    if (c != null && c.billed > 0) Text("${S.collected}: ${money(c.collected)} ${S.of} ${money(c.billed)}", style = MaterialTheme.typography.titleMedium)
+                    if (balances.values.none { it > 0 }) Hint(S.allPaid, MaterialTheme.colorScheme.primary)
+                }
+            }
+            if (!collect) item {
                 val d = report ?: return@item
                 val aging = Insights.aging(d, vm.today)
                 SectionCard(S.debtAging, subtitle = S.signConvention) {
@@ -132,7 +141,7 @@ fun UnitsScreen(vm: AppViewModel, nav: NavController) {
                     }
                 }
             }
-            item {
+            if (!collect) item {
                 SingleChoice(UnitFilter.entries, filter, { filter = it }) {
                     when (it) { UnitFilter.ALL -> S.allUnits; UnitFilter.OWES -> S.owes; UnitFilter.SETTLED -> S.settledOrCredit }
                 }
@@ -140,7 +149,7 @@ fun UnitsScreen(vm: AppViewModel, nav: NavController) {
             val shown = units.filter { u ->
                 val bal = balances[u.id] ?: 0
                 when (filter) { UnitFilter.ALL -> true; UnitFilter.OWES -> bal > 0; UnitFilter.SETTLED -> bal <= 0 }
-            }
+            }.let { l -> if (collect) l.sortedByDescending { balances[it.id] ?: 0 } else l }
             if (units.isEmpty()) item { EmptyState(S.empty, S.unitsHint, S.newUnit) { adding = true } }
             items(shown.size) { i ->
                 val u = shown[i]
@@ -154,11 +163,14 @@ fun UnitsScreen(vm: AppViewModel, nav: NavController) {
                         }
                         BalanceText(balances[u.id] ?: 0)
                     }
+                    if (collect) Button(onClick = { paying = u }, Modifier.fillMaxWidth()) { Text(S.payNow) }
                 }
             }
         }
     }
     if (adding) UnitDialog(vm, null, building.id) { adding = false }
+    paying?.let { u -> PaymentDialog(vm, building.id, units, building.calendar, 0, preset = u, close = { paying = null }) }
+    if (payingAny) PaymentDialog(vm, building.id, units, building.calendar, 0, close = { payingAny = false })
 }
 
 @Composable
@@ -201,7 +213,6 @@ fun UnitScreen(vm: AppViewModel, nav: NavController, unitId: String) {
     val report by derived(vm, unitId) { vm.reports.load(building.id) }
     val statement by derived(vm, unitId) { vm.repos.finance.unitStatement(building.id, unitId) }
     val lastClosed = periods.filter { it.status == PeriodStatus.FINALIZED }.maxByOrNull { it.endDate }
-    val sinceClosed by derived(vm, unitId, lastClosed?.id) { lastClosed?.let { vm.repos.finance.unitStatement(building.id, unitId, it.startDate, null) } }
     var editing by remember { mutableStateOf(false) }
     var addingOcc by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf(false) }
@@ -233,13 +244,9 @@ fun UnitScreen(vm: AppViewModel, nav: NavController, unitId: String) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = { paying = true }) { Text(S.payNow) }
                     OutlinedButton(onClick = {
-                        val d = report ?: return@OutlinedButton
-                        val lines = lastClosed?.let { p -> Insights.unitComposition(d, unitId, p.id).map { d.categoryName(it.first) to it.second } }.orEmpty()
-                        val bill = Bill(building.name, unit.label, lastClosed?.name, lines, sinceClosed?.opening ?: 0, sinceClosed?.payments ?: 0, balance, Fmt.date(vm.today, building.calendar))
-                        try {
-                            BillShare.shareBill(context, bill, mf, reminder())
-                        } catch (e: Exception) {
-                            vm.message(S.unexpectedError)
+                        vm.run {
+                            val bill = vm.repos.bills.bill(building.id, unitId, lastClosed?.id)
+                            BillShare.shareBill(context, bill, mf, reminder(), lastClosed?.id, unitId)
                         }
                     }) { Text(S.shareBill) }
                     if (balance > 0) OutlinedButton(onClick = { BillShare.shareText(context, reminder()) }) { Text(S.shareReminder) }

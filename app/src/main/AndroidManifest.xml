@@ -26,6 +26,9 @@
                 android:resource="@xml/file_paths" />
         </provider>
         <receiver
+            android:name=".share.BillShare$ChosenReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".update.UpdateReceiver"
             android:exported="false" />
         <activity

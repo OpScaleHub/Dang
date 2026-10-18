@@ -375,3 +375,31 @@ data class AuditEventEntity(
     /** Human-readable summary incl. the reason for corrections. Contains no resident personal data. */
     val summary: String,
 )
+
+/**
+ * A unit's bill for a period was handed over: shared to an app the user picked in the share
+ * sheet ([via] = that app's package) or marked by hand ([via] = [MANUAL]). Not financial data.
+ */
+@Serializable
+@Entity(
+    tableName = "bill_shares",
+    foreignKeys = [
+        ForeignKey(entity = BuildingEntity::class, parentColumns = ["id"], childColumns = [B], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = PeriodEntity::class, parentColumns = ["id"], childColumns = ["periodId"], onDelete = ForeignKey.CASCADE),
+        ForeignKey(entity = UnitEntity::class, parentColumns = ["id"], childColumns = ["unitId"], onDelete = ForeignKey.CASCADE),
+    ],
+    indices = [Index(B), Index("periodId"), Index("unitId")],
+)
+data class BillShareEntity(
+    @PrimaryKey val id: String,
+    val buildingId: String,
+    val periodId: String,
+    val unitId: String,
+    /** Epoch millis. */
+    val at: Long,
+    val via: String,
+) {
+    companion object {
+        const val MANUAL = "manual"
+    }
+}

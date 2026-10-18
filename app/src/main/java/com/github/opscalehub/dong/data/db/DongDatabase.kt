@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
         ParkingAssignmentEntity::class, MeterEntity::class, MeterReadingEntity::class, CategoryEntity::class,
         SupplierEntity::class, FundEntity::class, CashAccountEntity::class, ExpenseEntity::class,
         ChargeItemEntity::class, WaterTariffEntity::class, PeriodEntity::class, PeriodRevisionEntity::class,
-        JournalEntryEntity::class, JournalLineEntity::class, AuditEventEntity::class,
+        JournalEntryEntity::class, JournalLineEntity::class, AuditEventEntity::class, BillShareEntity::class,
     ],
     version = DongDatabase.VERSION,
     exportSchema = true,
@@ -25,7 +25,7 @@ abstract class DongDatabase : RoomDatabase() {
     abstract fun restoreDao(): RestoreDao
 
     companion object {
-        const val VERSION = 3
+        const val VERSION = 4
         const val NAME = "dong.db"
 
         fun build(context: Context, name: String? = NAME): DongDatabase {

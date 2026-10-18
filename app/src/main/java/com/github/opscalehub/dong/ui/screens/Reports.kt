@@ -116,6 +116,7 @@ fun ReportsScreen(vm: AppViewModel, @Suppress("UNUSED_PARAMETER") nav: NavContro
                                 Text("${S.remaining}: ${mf.withUnit(c.outstanding)}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
                             }
                         }
+                        SummaryShareButton(vm, building, p)
                     }
                 }
             }

@@ -149,6 +149,10 @@ fun PeriodScreen(vm: AppViewModel, nav: NavController, periodId: String) {
                     }
                     OutlinedButton(onClick = { exportHtml.launch("statement-${p.name}.html") }) { Text(S.exportStatement) }
                 }
+                if (finalized) {
+                    Button(onClick = { nav.navigate(com.github.opscalehub.dong.ui.Routes.send(p.id)) }, Modifier.fillMaxWidth()) { Text(S.sendBills) }
+                    SummaryShareButton(vm, building, p)
+                }
             }
         }
         val r = result

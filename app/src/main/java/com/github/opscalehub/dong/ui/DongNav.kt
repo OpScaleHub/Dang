@@ -63,6 +63,7 @@ import com.github.opscalehub.dong.ui.screens.ReportsScreen
 import com.github.opscalehub.dong.ui.screens.SettingsScreen
 import com.github.opscalehub.dong.ui.screens.SetupWizard
 import com.github.opscalehub.dong.ui.screens.UnitScreen
+import com.github.opscalehub.dong.ui.screens.SendBillsScreen
 import com.github.opscalehub.dong.ui.screens.UnitsScreen
 import com.github.opscalehub.dong.ui.screens.WaterScreen
 import com.github.opscalehub.dong.ui.screens.WelcomeScreen
@@ -84,6 +85,8 @@ object Routes {
     const val FINANCE = "finance"
     const val SETTINGS = "settings"
     const val AUDIT = "audit"
+    const val COLLECT = "collect"
+    fun send(periodId: String) = "send/$periodId"
     fun unit(id: String) = "unit/$id"
     fun meter(id: String) = "meter/$id"
     fun expense(id: String) = "expense/$id"
@@ -184,6 +187,8 @@ private fun titleFor(route: String): String = when {
     route == Routes.FINANCE -> S.transactions
     route == Routes.SETTINGS -> S.settings
     route == Routes.AUDIT -> S.auditLog
+    route == Routes.COLLECT -> S.collectTitle
+    route.startsWith("send/") -> S.stepSend
     route == Routes.BUILDINGS -> S.buildings
     route == Routes.SETUP -> S.setupTitle
     route.startsWith("unit/") -> S.unit
@@ -198,6 +203,8 @@ private fun DongNavHost(nav: NavHostController, vm: AppViewModel) {
     NavHost(nav, startDestination = Routes.HOME) {
         composable(Routes.HOME) { HomeScreen(vm, nav) }
         composable(Routes.UNITS) { UnitsScreen(vm, nav) }
+        composable(Routes.COLLECT) { UnitsScreen(vm, nav, collect = true) }
+        composable("send/{id}") { SendBillsScreen(vm, it.arguments?.getString("id")!!) }
         composable(Routes.EXPENSES) { ExpensesScreen(vm, nav) }
         composable(Routes.REPORTS) { ReportsScreen(vm, nav) }
         composable(Routes.MORE) { MoreScreen(nav) }

@@ -166,6 +166,19 @@ class EndToEndTest {
             assertTrue(bal.reconciles)
         }
 
+        // 3b. home step 4: bills of the closed month; mark one as handed over by hand
+        tab("خانه")
+        clickExpect("ارسال قبض واحدها", "قبض ارسال شده")
+        val billed = units.size
+        waitFor("۰ از ${com.github.opscalehub.dong.i18n.Fmt.number(billed.toLong())} قبض ارسال شده")
+        clickLast("علامت ارسال")
+        rule.waitUntil(5_000) { runBlocking { container.db.periodDao().shares(building.id).size == 1 } }
+        waitFor("۱ از ${com.github.opscalehub.dong.i18n.Fmt.number(billed.toLong())} قبض ارسال شده")
+        tab("خانه")
+        // 3c. home step 5: the debtors list with a payment button per unit
+        clickExpect("وصول شارژ", "واحدهای بدهکار، از بیشترین بدهی.")
+        waitFor("واحد ۱-۱")
+
         // 4. payment from the unit page: 50,000 Toman
         tab("واحدها")
         clickExpect("واحد ۱-۱", "ارسال قبض")

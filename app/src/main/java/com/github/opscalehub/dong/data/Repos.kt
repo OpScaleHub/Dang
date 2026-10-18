@@ -44,6 +44,7 @@ class Repos(val db: DongDatabase, val clock: Clock = SystemClock) {
     val expenses = ExpenseRepository(this)
     val finance = FinanceRepository(this)
     val periods = PeriodRepository(this)
+    val bills = BillRepository(this)
     internal val journal = JournalWriter(this)
 
     suspend fun <T> tx(block: suspend () -> T): T = db.withTransaction(block)

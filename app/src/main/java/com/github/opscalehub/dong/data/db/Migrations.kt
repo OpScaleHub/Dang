@@ -21,5 +21,21 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
+    /** v4: which units' bills were sent for a period (Home step «ارسال قبض واحدها»). */
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `bill_shares` (`id` TEXT NOT NULL, `buildingId` TEXT NOT NULL, `periodId` TEXT NOT NULL, " +
+                    "`unitId` TEXT NOT NULL, `at` INTEGER NOT NULL, `via` TEXT NOT NULL, PRIMARY KEY(`id`), " +
+                    "FOREIGN KEY(`buildingId`) REFERENCES `buildings`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                    "FOREIGN KEY(`periodId`) REFERENCES `periods`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , " +
+                    "FOREIGN KEY(`unitId`) REFERENCES `units`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_bill_shares_buildingId` ON `bill_shares` (`buildingId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_bill_shares_periodId` ON `bill_shares` (`periodId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_bill_shares_unitId` ON `bill_shares` (`unitId`)")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
 }

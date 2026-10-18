@@ -64,6 +64,7 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
     val units by vm.units.collectAsState()
     val expenses by vm.expenses.collectAsState()
     val funds by vm.funds.collectAsState()
+    val shares by vm.billShares.collectAsState()
     val current = vm.currentPeriod(periods, vm.today)
     val preview by derived(vm, current?.id, current?.status) { current?.let { vm.repos.periods.preview(it.id) } }
     val report by derived(vm, building.id) { vm.reports.load(building.id) }
@@ -99,9 +100,11 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
                         (preview?.total ?: 0L) == 0L -> S.addExpensesFirst // closing an empty month is pointless
                         else -> S.noIssues
                     }, finalized, true) { nav.navigate(Routes.period(current.id)) })
-                    add(StepState(S.stepSend, if (finalized) S.tapToOpen else S.afterClosing, false, finalized) { nav.navigate(Routes.UNITS) })
+                    val send = report?.let { sendProgress(com.github.opscalehub.dong.data.billedUnits(it, current.id), shares, current.id) }
+                    add(StepState(S.stepSend, if (finalized && send != null) S.sentCount.format(Fmt.number(send.first.toLong()), Fmt.number(send.second.toLong())) else S.afterClosing,
+                        send != null && send.second > 0 && send.first >= send.second, finalized) { nav.navigate(Routes.send(current.id)) })
                     add(StepState(S.stepCollect, coll?.takeIf { it.billed > 0 }?.let { "${money(it.collected)} ${S.of} ${money(it.billed)}" } ?: S.afterClosing,
-                        coll != null && coll.billed > 0 && coll.collected >= coll.billed, finalized) { nav.navigate(Routes.UNITS) })
+                        coll != null && coll.billed > 0 && coll.collected >= coll.billed, finalized) { nav.navigate(Routes.COLLECT) })
                 }
                 MonthHeader(current.name, finalized, steps.count { it.done }, steps.size)
                 Spacer(Modifier.padding(4.dp))

@@ -53,6 +53,7 @@ class BackupRepository(private val r: Repos, private val appVersion: String) {
             cashAccounts = fd.cashAccounts(buildingId), expenses = ed.expenses(buildingId), chargeItems = ed.chargeItems(buildingId),
             tariffs = wd.tariffs(buildingId), periods = pd.periods(buildingId), revisions = pd.revisionsForBuilding(buildingId),
             entries = fd.entries(buildingId), lines = fd.lines(buildingId), audit = fd.audit(buildingId),
+            billShares = pd.shares(buildingId),
         )
     }
 
@@ -113,6 +114,7 @@ class BackupRepository(private val r: Repos, private val appVersion: String) {
         cmp(a.entries, local.entries) { it.id }
         cmp(a.lines, local.lines) { it.id }
         cmp(a.audit, local.audit) { it.id }
+        cmp(a.billShares, local.billShares) { it.id }
         return newCount to diff
     }
 
@@ -161,6 +163,7 @@ class BackupRepository(private val r: Repos, private val appVersion: String) {
             inserted += rd.entries(b.entries).count()
             inserted += rd.lines(b.lines).count()
             inserted += rd.audit(b.audit).count()
+            inserted += rd.billShares(b.billShares).count()
             r.journal.audit(b.building.id, "RESTORE_${modes[b.building.id]}", "building", b.building.id,
                 "بازیابی از پشتیبان نسخه ${preview.header.appVersion}")
         }

@@ -1,6 +1,7 @@
 package com.github.opscalehub.dong.io
 
 import com.github.opscalehub.dong.data.db.AuditEventEntity
+import com.github.opscalehub.dong.data.db.BillShareEntity
 import com.github.opscalehub.dong.data.db.BuildingEntity
 import com.github.opscalehub.dong.data.db.CashAccountEntity
 import com.github.opscalehub.dong.data.db.CategoryEntity
@@ -55,13 +56,15 @@ data class BuildingBackup(
     val entries: List<JournalEntryEntity> = emptyList(),
     val lines: List<JournalLineEntity> = emptyList(),
     val audit: List<AuditEventEntity> = emptyList(),
+    /** Added in schema v4; older backups have none. */
+    val billShares: List<BillShareEntity> = emptyList(),
 ) {
     /** Every row's id, for duplicate detection and merge counting. */
     fun allIds(): List<String> = listOf(building.id) + units.map { it.id } + occupancy.map { it.id } + spaces.map { it.id } +
         assignments.map { it.id } + meters.map { it.id } + readings.map { it.id } + categories.map { it.id } +
         suppliers.map { it.id } + funds.map { it.id } + cashAccounts.map { it.id } + expenses.map { it.id } +
         chargeItems.map { it.id } + tariffs.map { it.id } + periods.map { it.id } + revisions.map { it.id } +
-        entries.map { it.id } + lines.map { it.id } + audit.map { it.id }
+        entries.map { it.id } + lines.map { it.id } + audit.map { it.id } + billShares.map { it.id }
 
     val recordCount: Int get() = allIds().size
 }
@@ -165,7 +168,7 @@ object BackupCodec {
                 b.categories.map { it.buildingId }, b.suppliers.map { it.buildingId }, b.funds.map { it.buildingId },
                 b.cashAccounts.map { it.buildingId }, b.expenses.map { it.buildingId }, b.chargeItems.map { it.buildingId },
                 b.tariffs.map { it.buildingId }, b.periods.map { it.buildingId }, b.entries.map { it.buildingId },
-                b.lines.map { it.buildingId }, b.audit.map { it.buildingId }).flatten()
+                b.lines.map { it.buildingId }, b.audit.map { it.buildingId }, b.billShares.map { it.buildingId }).flatten()
             ref(owned.all { it == bid }, "buildingId")
             ref(b.occupancy.all { it.unitId in units }, "occupancy.unitId")
             ref(b.assignments.all { it.spaceId in spaces && it.unitId in units }, "parking_assignments")
@@ -174,6 +177,7 @@ object BackupCodec {
             ref(b.expenses.all { (it.periodId == null || it.periodId in periods) && it.fundId in funds && it.categoryId in cats }, "expenses")
             ref(b.revisions.all { it.periodId in periods }, "period_revisions")
             ref(b.lines.all { it.entryId in entries }, "journal_lines.entryId")
+            ref(b.billShares.all { it.periodId in periods && it.unitId in units }, "bill_shares")
             if (b.occupancy.any { it.occupantCount < 0 } || b.units.any { it.areaCentiM2 < 0 } || b.readings.any { it.valueLiters < 0 }) {
                 out += BackupProblem(ProblemCode.INVALID_VALUE, "negative quantity")
             }

@@ -62,4 +62,16 @@ class MigrationTest {
         }
         db.close()
     }
+
+    @Test
+    fun `migrate 3 to 4 adds bill shares with cascades`() {
+        helper.createDatabase("m34.db", 3).apply {
+            execSQL("INSERT INTO buildings (id, name, address, currencyCode, currencyName, minorDigits, roundingIncrement, occupancyBasis, calendar, notes, createdAt, displayCurrencyName, displayDivisor) VALUES ('b1','ساختمان','', 'IRR','ریال',0,1000,'DAY_WEIGHTED','JALALI','',1,'تومان',10)")
+            close()
+        }
+        val db = helper.runMigrationsAndValidate("m34.db", 4, true, *Migrations.ALL)
+        db.query("SELECT displayDivisor FROM buildings WHERE id = 'b1'").use { c -> c.moveToFirst(); assertEquals(10L, c.getLong(0)) }
+        db.query("SELECT COUNT(*) FROM bill_shares").use { c -> c.moveToFirst(); assertEquals(0L, c.getLong(0)) }
+        db.close()
+    }
 }
