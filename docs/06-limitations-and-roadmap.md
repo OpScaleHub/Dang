@@ -24,8 +24,8 @@
     occupancy, areas and parking. Changes to expense amounts of a finalized
     period are made with a new (possibly negative) expense or a unit
     adjustment, not by editing the original.
-11. **Release signing** is not configured; `assembleRelease` produces an
-    unsigned APK. Debug APKs are installable for evaluation.
+11. **Distribution is direct APK only** (GitHub Releases + in-app updater, signed
+    with one release key kept outside the repo; see README). No store listing.
 12. **Accessibility** was checked for labels (all actions and charts have
     accessible names/summaries) but not with a full TalkBack walkthrough.
 13. **Existing buildings keep their display unit after the v3 upgrade**
@@ -41,11 +41,11 @@ target, late fees.
 
 | Priority | Item | Notes |
 |---|---|---|
-| P1 | Share bills to all debtors in one go | Today: one unit at a time |
-| P1 | Signed release build + F-Droid / Play listing | Needs a keystore decision |
-| P2 | Receipt photos (content URI + migration v4) | Backup must then include files (zip) |
+| P1 | Share bills to all debtors in one go | Partly done in 0.3.1: «ارسال قبض واحدها» lists every unit with sent status; each bill still opens its own share sheet |
+| P1 | F-Droid / Play listing | Signed releases and in-app updates exist since 0.2.0/0.3.0 |
+| P2 | Receipt photos (content URI + migration v5) | Backup must then include files (zip) |
 | P2 | Payment allocation to specific charges (instead of oldest-first) | Aging and collection reports already use oldest-first settlement |
 | P2 | Reminders for due dates and missing readings | WorkManager, local only |
-| P3 | Google Sheets export | Optional, user-initiated |
+| P2 | **Shared read-only view for residents via Google Drive** (owner's idea, 2026-10-18; deliberately not started) | The manager publishes the building's workbook (or a summary) to their own Google Drive/Sheets and shares a view-only link with residents, who see balances and monthly reports without installing anything. Open questions for that round: Google sign-in and Drive scope (`drive.file` only), automatic vs. manual publish after closing a month, what residents may see (per-unit debts are sensitive — same opt-in as the month summary image), and keeping the app usable fully offline. Builds on the existing XLSX export and the month summary image. |
 | P3 | Optional sync / shared access with roles | Requires a backend; append-only journal and UUIDs already fit |
-| P3 | Additional languages (English first) | |
+| — | Additional languages | Not planned: the product targets Iranian buildings (see docs/08) |
