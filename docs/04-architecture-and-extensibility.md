@@ -17,8 +17,20 @@ Deliberately **not** used: a DI framework (one manual `AppContainer` is enough
 for one module), multiple Gradle modules (the domain boundary is enforced by
 package and verified by a grep for `android*` imports), Apache POI (too heavy
 for Android; a 200-line OOXML writer suffices for export), any network library
-(the APK requests no INTERNET permission — verified with `aapt2 dump
-permissions`).
+(the only network use is the updater, a plain `HttpURLConnection` GET; see below).
+
+## In-app updates
+
+`update/Updater.kt` reads the landing page's `release.json` (written by
+`scripts/release.sh`) at most once a day on start in release builds, or when the
+user taps «بررسی نسخه جدید». A newer `versionCode` is offered on Home and in
+Settings; the APK is downloaded from the version-pinned release URL into the
+cache, checked against the published SHA-256 and the archive's own package name
+and version, then committed to a `PackageInstaller` session. Android always shows
+its confirmation screen and rejects an APK signed with a different key.
+`UpdateReceiver` maps the installer's status back to the UI. Permissions:
+`INTERNET` and `REQUEST_INSTALL_PACKAGES`. Debug builds never check unless built
+with `-PupdateUrl=…`, which also allows cleartext to `localhost` for testing.
 
 ## Layers and rules
 

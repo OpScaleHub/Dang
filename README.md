@@ -7,7 +7,8 @@
 
 Dong is an offline-first Android app (Persian, right-to-left) for residential
 building management and expense accounting. It runs entirely on the phone: no
-backend, no account, no network permission, no analytics.
+backend, no account, no analytics. The only network use is checking for and
+downloading a new version of the app (can be switched off in Settings).
 
 ## What it does
 

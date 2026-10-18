@@ -71,6 +71,7 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
 
     WithFab(S.payNow, { paying = true }) {
         ScreenList {
+            item { com.github.opscalehub.dong.ui.UpdateCard(vm.updater) }
             // ---- month header ------------------------------------------------
             item {
                 if (current == null) {

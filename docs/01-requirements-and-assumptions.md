@@ -72,7 +72,9 @@ choice in each finalized period's snapshot.
 
 ## 5. Non-functional requirements
 
-- Works fully offline; no network permission is requested at all.
+- Works fully offline. The only network use is the in-app updater, which reads the
+  public `release.json` from the landing page and downloads the new APK; it sends
+  no user or building data and can be switched off in Settings.
 - No account, analytics, telemetry, ads or cloud dependency.
 - Financial writes happen inside database transactions; failures roll back.
 - Finalized financial history is append-only; corrections are linked reversals

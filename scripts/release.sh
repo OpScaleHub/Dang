@@ -84,9 +84,10 @@ APKSIGNER=$(ls -d "${ANDROID_HOME:-$HOME/Android/Sdk}"/build-tools/*/apksigner 2
 if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs "$OUT/dong.apk" | grep -m1 "certificate DN"; else echo "(apksigner not found; skipped signature check)"; fi
 
 # ---- landing-page metadata + notes ------------------------------------------
-python3 - "$next" "$SIZE" "$SHA" <<'PY'
+MIN_SDK=$(sed -n 's/.*minSdk = \([0-9]*\).*/\1/p' app/build.gradle.kts | head -1)
+python3 - "$next" "$SIZE" "$SHA" "$next_code" "$MIN_SDK" <<'PY'
 import json, sys, datetime
-v, size, sha = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+v, size, sha, code, min_sdk = sys.argv[1], int(sys.argv[2]), sys.argv[3], int(sys.argv[4]), int(sys.argv[5])
 d = datetime.date.today()
 def jalali(g):
     gy, gm, gd = g.year, g.month, g.day
@@ -100,9 +101,12 @@ def jalali(g):
     jd = 1 + (days % 31 if days < 186 else (days-186) % 30)
     return f"{jy}/{jm:02d}/{jd:02d}"
 json.dump({
-  "version": v, "date": d.isoformat(), "dateJalali": jalali(d),
+  "version": v, "versionCode": code, "minSdk": min_sdk,
+  "date": d.isoformat(), "dateJalali": jalali(d),
   "sizeBytes": size, "sha256": sha,
   "apk": "https://github.com/OpScaleHub/Dong/releases/latest/download/dong.apk",
+  # Read by the in-app updater (update/Updater.kt): fixed to this version's file.
+  "apkPinned": f"https://github.com/OpScaleHub/Dong/releases/download/v{v}/dong-{v}.apk",
   "notes": f"https://github.com/OpScaleHub/Dong/releases/tag/v{v}",
 }, open("site/release.json", "w"), indent=2, ensure_ascii=False)
 open("site/release.json", "a").write("\n")

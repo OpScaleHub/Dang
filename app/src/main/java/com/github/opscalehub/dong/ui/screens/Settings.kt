@@ -104,9 +104,17 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
         item {
+            var auto by remember { mutableStateOf(vm.updater.autoCheck) }
+            SectionCard(S.updTitle) {
+                KeyValue(S.version, Fmt.digits(BuildConfig.VERSION_NAME))
+                com.github.opscalehub.dong.ui.SwitchRow(S.updAuto, auto, { auto = it; vm.updater.autoCheck = it }, supporting = S.updAutoHint)
+                OutlinedButton(onClick = { vm.updater.check(manual = true) }, Modifier.fillMaxWidth()) { Text(S.updCheckNow) }
+                com.github.opscalehub.dong.ui.UpdateCard(vm.updater, inSettings = true)
+            }
+        }
+        item {
             SectionCard(S.privacyTitle) {
                 Text(S.privacyBody, style = MaterialTheme.typography.bodyMedium)
-                KeyValue(S.version, Fmt.digits(BuildConfig.VERSION_NAME))
             }
         }
     }

@@ -37,6 +37,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val repos = container.repos
     val backup = container.backup
     val reports = container.reports
+    val updater = container.updater
     private val db = container.db
     private val prefs = app.getSharedPreferences("ui", Context.MODE_PRIVATE)
 

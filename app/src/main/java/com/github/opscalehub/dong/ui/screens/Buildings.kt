@@ -69,6 +69,7 @@ fun WelcomeScreen(vm: AppViewModel) {
         return
     }
     ScreenList {
+        item { com.github.opscalehub.dong.ui.UpdateCard(vm.updater) }
         item {
             Column(Modifier.fillMaxWidth().padding(top = 40.dp, bottom = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(S.appName, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)

@@ -30,6 +30,11 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Persian-only UI: drop the ~90 locales of library strings.
         resourceConfigurations += listOf("fa")
+        // Update check (update/Updater.kt). Release builds check on start; debug builds only when
+        // -PupdateUrl=... is given, so tests never touch the network.
+        val updateUrl = (findProperty("updateUrl") as String?)
+        buildConfigField("String", "UPDATE_URL", "\"${updateUrl ?: "https://opscalehub.github.io/Dong/release.json"}\"")
+        buildConfigField("boolean", "UPDATE_AUTO_DEBUG", "${updateUrl != null}")
     }
 
     signingConfigs {

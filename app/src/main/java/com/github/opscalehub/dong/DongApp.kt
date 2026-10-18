@@ -5,6 +5,7 @@ import com.github.opscalehub.dong.data.BackupRepository
 import com.github.opscalehub.dong.data.ReportRepository
 import com.github.opscalehub.dong.data.Repos
 import com.github.opscalehub.dong.data.db.DongDatabase
+import com.github.opscalehub.dong.update.Updater
 
 /** Manual dependency container: one database, one set of repositories for the process. */
 class AppContainer(app: Application) {
@@ -12,6 +13,7 @@ class AppContainer(app: Application) {
     val repos = Repos(db)
     val backup = BackupRepository(repos, BuildConfig.VERSION_NAME)
     val reports = ReportRepository(repos)
+    val updater = Updater(app, BuildConfig.VERSION_CODE, BuildConfig.UPDATE_URL, autoCheckAllowed = !BuildConfig.DEBUG || BuildConfig.UPDATE_AUTO_DEBUG)
 }
 
 class DongApp : Application() {
@@ -21,5 +23,6 @@ class DongApp : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        container.updater.onAppStart()
     }
 }
