@@ -1,12 +1,12 @@
 {
-  "version": "0.3.0",
-  "versionCode": 3,
+  "version": "0.3.1",
+  "versionCode": 4,
   "minSdk": 26,
   "date": "2026-10-18",
   "dateJalali": "1405/07/26",
-  "sizeBytes": 7606353,
-  "sha256": "5e1cee991b018338f55e592469617b6e117af20c4b4d666e726677ffd009bff6",
-  "apk": "https://github.com/OpScaleHub/Dong/releases/latest/download/dong.apk",
-  "apkPinned": "https://github.com/OpScaleHub/Dong/releases/download/v0.3.0/dong-0.3.0.apk",
-  "notes": "https://github.com/OpScaleHub/Dong/releases/tag/v0.3.0"
+  "sizeBytes": 7639169,
+  "sha256": "f0118a464c3b4901d93f84f048f74eb4fa0651653a76aee1c1516a191fdf60db",
+  "apk": "https://github.com/OpScaleHub/Dong/releases/latest/download/dang.apk",
+  "apkPinned": "https://github.com/OpScaleHub/Dong/releases/download/v0.3.1/dang-0.3.1.apk",
+  "notes": "https://github.com/OpScaleHub/Dong/releases/tag/v0.3.1"
 }
