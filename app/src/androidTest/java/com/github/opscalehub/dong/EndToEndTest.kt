@@ -129,7 +129,10 @@ class EndToEndTest {
         type("واحد در هر طبقه", "2")
         clickLast("ساختن فهرست واحدها")
         clickLast("بعدی")
-        // Step 3: how the building charges. Splitting the bills keeps this test's numbers.
+        // Step 3: shared bills. Unit water meters are generated, never added one by one.
+        clickLast("کنتور اصلی، و هر واحد هم کنتور داخلی دارد")
+        clickLast("بعدی")
+        // Step 4: how the building charges. Splitting the bills keeps this test's numbers.
         clickLast("هر ماه قبض‌ها را بین واحدها تقسیم می‌کنم")
         clickLast("بعدی")
         clickLast("پایان")
@@ -139,6 +142,9 @@ class EndToEndTest {
         val units = runBlocking { container.db.buildingDao().units(building.id).associateBy { it.label } }
         assertEquals(setOf("۱-۱", "۱-۲"), units.keys)
         assertEquals(1, runBlocking { container.db.periodDao().periods(building.id).size })
+        // One main meter + one per unit, and the default one parking space per unit.
+        assertEquals(3, runBlocking { container.db.waterDao().meters(building.id).size })
+        assertEquals(2, runBlocking { container.db.buildingDao().assignments(building.id).count { it.effectiveTo == null } })
 
         // 2. expense: cleaning (per occupant), 100,000 Toman = 1,000,000 Rial
         tab("هزینه‌ها")

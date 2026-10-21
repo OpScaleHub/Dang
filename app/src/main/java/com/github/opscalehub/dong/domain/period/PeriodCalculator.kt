@@ -2,6 +2,8 @@ package com.github.opscalehub.dong.domain.period
 
 import com.github.opscalehub.dong.domain.allocation.AllocationContext
 import com.github.opscalehub.dong.domain.allocation.AllocationEngine
+import com.github.opscalehub.dong.domain.allocation.AllocationPolicy
+import com.github.opscalehub.dong.domain.allocation.Basis
 import com.github.opscalehub.dong.domain.allocation.AllocationResult
 import com.github.opscalehub.dong.domain.allocation.QuantityKind
 import com.github.opscalehub.dong.domain.model.ChargeMode
@@ -71,6 +73,8 @@ data class PeriodSnapshot(
 
 object PeriodCalculator {
 
+    private fun usesMeters(p: AllocationPolicy) = !p.fundOnly && p.components.any { it.basis is Basis.Consumption }
+
     /** The allocation context of a period — shared by finalization and the expense-form preview. */
     fun context(input: PeriodInput, water: WaterReport = WaterCalculator.report(input.meters, input.readings, input.units.filter { it.active }.map { it.id }, input.startDate, input.endDate)) =
         AllocationContext(
@@ -91,7 +95,11 @@ object PeriodCalculator {
             return PeriodResult(emptyList(), emptyList(), WaterReport(emptyList(), null, emptyMap(), emptyList(), emptyList()), issues)
         }
         val water = WaterCalculator.report(input.meters, input.readings, input.units.filter { it.active }.map { it.id }, input.startDate, input.endDate)
-        if (input.meters.isNotEmpty()) issues += water.issues
+        // Readings matter only when a bill is split by meter; otherwise a meter is just a record and
+        // a missing reading must not hold up the month (the allocation reports its own gaps).
+        val byMeter = input.expenses.any { usesMeters(it.policy) } ||
+            input.chargeItems.any { it.mode == ChargeMode.WATER_TARIFF || usesMeters(it.policy) }
+        if (input.meters.isNotEmpty()) issues += if (byMeter) water.issues else water.issues.filter { !it.blocking }
         val ctx = context(input, water)
         val sources = mutableListOf<SourceResult>()
         for (e in input.expenses) {

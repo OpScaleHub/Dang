@@ -55,7 +55,8 @@ fun MoreScreen(vm: AppViewModel, nav: NavController) {
     val charges by vm.chargeItems.collectAsState()
     val groups = listOf(
         listOfNotNull(
-            Entry(S.readingsBatch, S.stepReadings, Icons.Filled.Refresh, Routes.READINGS).takeIf { advanced || meters.isNotEmpty() },
+            // Simple mode: the month's readings are a Home step and a button on the meters screen.
+            Entry(S.readingsBatch, S.stepReadings, Icons.Filled.Refresh, Routes.READINGS).takeIf { advanced && meters.isNotEmpty() },
             Entry(S.monthsAndClosing, S.menuMonths, Icons.Filled.DateRange, Routes.PERIODS),
             Entry(S.transactions, S.menuTransactions, Icons.AutoMirrored.Filled.List, Routes.FINANCE),
         ),

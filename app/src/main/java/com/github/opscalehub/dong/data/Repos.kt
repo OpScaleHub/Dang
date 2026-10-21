@@ -96,6 +96,12 @@ class JournalWriter(private val r: Repos) {
     }
 }
 
+/** Most parking spaces one unit can have in the simple screens. */
+const val MAX_PARKING = 9
+
+/** The water bill split by each unit's meter; the main meter's remainder (common use) equally. */
+val METERED_WATER = AllocationPolicy.single(Basis.Consumption(CommonWater.Separate(SimpleBasis.EQUAL)))
+
 /** Name of the monthly charge created by the setup wizard (fixed-charge buildings). */
 const val MONTHLY_CHARGE = "شارژ ماهانه"
 private const val S_BASE = "پایه"
@@ -110,6 +116,7 @@ class BuildingRepository(private val r: Repos) {
     suspend fun create(
         name: String, address: String = "", roundingIncrement: Long = 1, currencyName: String = "ریال",
         displayCurrencyName: String = "تومان", displayDivisor: Long = 10, plan: ChargePlan? = null,
+        bills: SharedBills = SharedBills(), areasKnown: Boolean = false,
     ): String = r.tx {
         if (name.isBlank()) fail(OpError.INVALID_INPUT, "name")
         if (roundingIncrement < 1) fail(OpError.INVALID_INPUT, "rounding")
@@ -123,14 +130,27 @@ class BuildingRepository(private val r: Repos) {
         fin.upsertFund(op)
         fin.upsertFund(res)
         fin.upsertCashAccount(CashAccountEntity(newId(), id, "صندوق نقدی", CashKind.CASH_BOX))
-        (if (plan == null) defaultCategories(op.id, res.id) else simpleCategories(op.id, plan)).forEachIndexed { i, c ->
+        (if (plan == null) defaultCategories(op.id, res.id) else simpleCategories(op.id, plan, bills, areasKnown)).forEachIndexed { i, c ->
             r.db.expenseDao().upsertCategory(CategoryEntity(newId(), id, c.name, c.policy.encode(), c.fund, c.water, c.active, i))
         }
         r.journal.audit(id, "CREATE_BUILDING", "building", id, name)
         id
     }
 
-    data class UnitDraft(val label: String, val floor: Int, val areaCentiM2: Long, val occupants: Int)
+    data class UnitDraft(val label: String, val floor: Int, val areaCentiM2: Long, val occupants: Int, val parking: Int = 0)
+
+    /** How the building's water bill works; asked in plain words by the setup wizard. */
+    enum class WaterSetup {
+        /** Each unit has its own official meter and pays its own bill: no water expense type. */
+        OWN,
+        /** One meter for the whole building: the bill is split like any other bill. */
+        SHARED,
+        /** One main meter plus an internal meter per unit: each unit pays by its own reading. */
+        METERED,
+    }
+
+    /** Which bills the building pays together; everything else each unit pays itself. */
+    data class SharedBills(val water: WaterSetup = WaterSetup.SHARED, val gas: Boolean = false)
 
     /** How the building charges residents; asked in plain words by the setup wizard. */
     sealed interface ChargePlan {
@@ -160,8 +180,9 @@ class BuildingRepository(private val r: Repos) {
     suspend fun setup(
         name: String, address: String, displayToman: Boolean, roundingIncrement: Long,
         units: List<UnitDraft>, openingCash: Long, openingReserve: Long, plan: ChargePlan = ChargePlan.SplitBills,
+        bills: SharedBills = SharedBills(),
     ): String = r.tx {
-        if (units.isEmpty() || units.any { it.label.isBlank() || it.areaCentiM2 < 0 || it.occupants < 0 }) fail(OpError.INVALID_INPUT, "units")
+        if (units.isEmpty() || units.any { it.label.isBlank() || it.areaCentiM2 < 0 || it.occupants < 0 || it.parking !in 0..MAX_PARKING }) fail(OpError.INVALID_INPUT, "units")
         if (units.map { it.label.trim() }.toSet().size != units.size) fail(OpError.INVALID_INPUT, "duplicate label")
         if (plan is ChargePlan.Fixed) {
             val rates = listOf(plan.perUnit, plan.perPerson, plan.perM2)
@@ -169,13 +190,17 @@ class BuildingRepository(private val r: Repos) {
             if (plan.perM2 > 0 && units.any { it.areaCentiM2 <= 0 }) fail(OpError.INVALID_INPUT, "area")
             plan.unitWeights?.let { w -> if (w.size != units.size || w.any { it < 0 } || w.all { it == 0L }) fail(OpError.INVALID_INPUT, "multipliers") }
         }
-        val b = create(name, address, roundingIncrement, displayCurrencyName = if (displayToman) "تومان" else "", displayDivisor = if (displayToman) 10 else 1, plan = plan)
+        val b = create(name, address, roundingIncrement, displayCurrencyName = if (displayToman) "تومان" else "", displayDivisor = if (displayToman) 10 else 1,
+            plan = plan, bills = bills, areasKnown = units.all { it.areaCentiM2 > 0 })
         val month = SampleData.month(r.clock.today())
         units.forEachIndexed { i, u ->
             val e = UnitEntity(newId(), b, u.floor, u.label.trim(), u.areaCentiM2, sortOrder = i + 1)
             saveUnit(e)
             setOccupancy(e.id, month.start, u.occupants)
+            if (u.parking > 0) setParkingCount(e.id, u.parking, month.start)
         }
+        // The water category already splits by meter (simpleCategories); only the meters are missing.
+        if (bills.water == WaterSetup.METERED) r.water.generateMeters(b, splitWaterByMeter = false)
         if (openingCash != 0L || openingReserve != 0L) {
             val fin = r.db.financeDao()
             val cash = fin.cashAccounts(b).first().id
@@ -205,13 +230,21 @@ class BuildingRepository(private val r: Repos) {
      * The short list a new building starts with (the demo keeps the full one below). With a fixed
      * monthly charge every bill is paid from the fund by default, so nothing is charged twice; the
      * inactive «شارژ ماهانه» type only carries the monthly charge and is hidden from the expense form.
+     * Bills each unit pays itself get no type at all. Metered water is always charged by reading,
+     * even on top of a fixed charge: that is the point of the meters.
      */
-    private fun simpleCategories(op: String, plan: ChargePlan): List<Cat> {
+    private fun simpleCategories(op: String, plan: ChargePlan, bills: SharedBills, areasKnown: Boolean): List<Cat> {
         val fixed = plan is ChargePlan.Fixed
         fun p(b: Basis) = if (fixed) AllocationPolicy.FUND_ONLY else AllocationPolicy.single(b)
         return listOfNotNull(
-            Cat("آب", p(Basis.Occupants), op, water = true),
-            Cat("برق و گاز مشاعات", p(Basis.Equal), op),
+            when (bills.water) {
+                WaterSetup.OWN -> null
+                WaterSetup.SHARED -> Cat("آب", p(Basis.Occupants), op, water = true)
+                WaterSetup.METERED -> Cat("آب", METERED_WATER, op, water = true)
+            },
+            // Heating gas is usually fairest by area; without areas, equally.
+            if (bills.gas) Cat("گاز", p(if (areasKnown) Basis.Area else Basis.Equal), op) else null,
+            Cat(if (bills.gas) "برق مشاعات" else "برق و گاز مشاعات", p(Basis.Equal), op),
             Cat("نظافت", p(Basis.Occupants), op),
             Cat("آسانسور", p(Basis.Equal), op),
             Cat("تعمیرات", p(Basis.Equal), op),
@@ -301,6 +334,36 @@ class BuildingRepository(private val r: Repos) {
         id
     }
 
+    /**
+     * Gives a unit exactly [count] parking spaces from [from], for when a resident buys or sells one.
+     * Extra spaces are released (they stay in the list, free for another unit); missing ones reuse
+     * free spaces first, then new spaces numbered after the existing ones.
+     */
+    suspend fun setParkingCount(unitId: String, count: Int, from: Long) = r.tx {
+        if (count !in 0..MAX_PARKING) fail(OpError.INVALID_INPUT, "parking")
+        val unit = dao.unit(unitId) ?: fail(OpError.NOT_FOUND)
+        val all = dao.assignments(unit.buildingId)
+        val mine = all.filter { it.unitId == unitId && it.effectiveTo == null }.sortedBy { it.effectiveFrom }
+        mine.drop(count).forEach { a ->
+            // An assignment that starts today is simply cut to nothing; older ones end the day before.
+            dao.upsertAssignment(a.copy(effectiveTo = maxOf(a.effectiveFrom, from - 1)))
+            r.journal.audit(unit.buildingId, "END_PARKING", "parking_space", a.spaceId, "واحد ${unit.label} از ${Fmt.date(from)}")
+        }
+        var need = count - mine.size
+        if (need <= 0) return@tx
+        val spaces = dao.spaces(unit.buildingId)
+        val taken = all.filter { it.effectiveTo == null }.map { it.spaceId }.toSet()
+        spaces.filter { it.active && it.id !in taken }.take(need).forEach { s ->
+            assignSpace(s.id, unitId, ParkingRelation.OWNED, true, "", from)
+            need--
+        }
+        var next = (spaces.mapNotNull { Fmt.parseLong(it.label) }.maxOrNull() ?: spaces.size.toLong()) + 1
+        repeat(need) {
+            val id = saveSpace(ParkingSpaceEntity(newId(), unit.buildingId, Fmt.digits((next++).toString())))
+            assignSpace(id, unitId, ParkingRelation.OWNED, true, "", from)
+        }
+    }
+
     suspend fun endAssignment(assignmentId: String, to: Long) = r.tx {
         val a = dao.assignment(assignmentId) ?: fail(OpError.NOT_FOUND)
         if (to < a.effectiveFrom) fail(OpError.INVALID_INPUT)
@@ -377,6 +440,35 @@ class WaterRepository(private val r: Repos) {
         addReading(newId, date, initialValueLiters, ReadingKind.INITIAL, "قرائت اولیه کنتور جدید")
         r.journal.audit(old.buildingId, "REPLACE_METER", "meter", old.id, "${old.label} ← $newLabel در ${Fmt.date(date)}")
         newId
+    }
+
+    /**
+     * Creates the building's main meter (if it has none) and one meter for every active unit that
+     * has none, so nobody adds them one at a time. With [splitWaterByMeter], the water expense type
+     * (created if missing) is split by these meters from now on. Returns how many meters were made.
+     */
+    suspend fun generateMeters(buildingId: String, splitWaterByMeter: Boolean = true): Int = r.tx {
+        val meters = dao.meters(buildingId).filter { it.retiredOn == null }
+        var made = 0
+        if (meters.none { it.role == MeterRole.MAIN }) {
+            saveMeter(MeterEntity(newId(), buildingId, null, MeterRole.MAIN, "کنتور اصلی ساختمان"))
+            made++
+        }
+        r.db.buildingDao().units(buildingId).filter { it.active }.sortedBy { it.sortOrder }
+            .filter { u -> meters.none { it.role == MeterRole.UNIT && it.unitId == u.id } }
+            .forEach { u ->
+                saveMeter(MeterEntity(newId(), buildingId, u.id, MeterRole.UNIT, "کنتور واحد ${u.label}"))
+                made++
+            }
+        if (splitWaterByMeter) {
+            val cats = r.db.expenseDao().categories(buildingId)
+            val water = cats.filter { it.isWater && it.active }
+            if (water.isEmpty()) {
+                val op = r.db.financeDao().funds(buildingId).first { it.kind == FundKind.OPERATING }.id
+                r.expenses.saveCategory(CategoryEntity(newId(), buildingId, "آب", METERED_WATER.encode(), op, isWater = true, sortOrder = -1))
+            } else water.forEach { r.expenses.saveCategory(it.copy(defaultPolicyJson = METERED_WATER.encode())) }
+        }
+        made
     }
 
     suspend fun saveTariff(t: WaterTariffEntity): String = r.tx {

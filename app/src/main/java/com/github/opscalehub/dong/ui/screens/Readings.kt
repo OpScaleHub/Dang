@@ -48,6 +48,7 @@ fun ReadingsScreen(vm: AppViewModel, nav: NavController) {
     val readings by vm.readings.collectAsState()
     val units by vm.units.collectAsState()
     val periods by vm.periods.collectAsState()
+    val advanced by vm.ui.advanced.collectAsState()
     val draft = vm.currentPeriod(periods, vm.today)?.takeIf { it.status == PeriodStatus.DRAFT }
     val date = rememberDate(draft?.let { minOf(vm.today, it.endDate).coerceAtLeast(it.startDate) } ?: vm.today, building.calendar)
     val input = remember { mutableStateMapOf<String, String>() }
@@ -88,8 +89,8 @@ fun ReadingsScreen(vm: AppViewModel, nav: NavController) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(m.label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Hint(Fa.meterRole(m.role) + (m.unitId?.let { id -> "، ${S.unit} ${units.firstOrNull { it.id == id }?.label ?: ""}" } ?: ""))
-                        Hint("${S.previous}: " + (r.prev?.let { "${Fmt.cubicMeters(it.valueLiters)} (${Fmt.date(it.readingDate, building.calendar)})" } ?: S.none))
+                        if (advanced) Hint(Fa.meterRole(m.role) + (m.unitId?.let { id -> "، ${S.unit} ${units.firstOrNull { it.id == id }?.label ?: ""}" } ?: ""))
+                        Hint(r.prev?.let { "${S.previous}: ${Fmt.cubicMeters(it.valueLiters)} (${Fmt.date(it.readingDate, building.calendar)})" } ?: S.firstReading)
                     }
                     Spacer(Modifier.width(8.dp))
                     OutlinedTextField(

@@ -74,6 +74,7 @@ fun SettingsScreen(vm: AppViewModel) {
     val scope = rememberCoroutineScope()
     var addingFund by remember { mutableStateOf(false) }
     var addingCash by remember { mutableStateOf(false) }
+    val advancedMode by vm.ui.advanced.collectAsState()
 
     val backupLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) scope.launch {
@@ -100,7 +101,8 @@ fun SettingsScreen(vm: AppViewModel) {
             }
         }
         item { BuildingSettingsCard(vm) }
-        item {
+        // Funds and bank accounts are bookkeeping detail: simple mode works with the defaults.
+        if (advancedMode) item {
             SectionCard(S.fundsAndCash) {
                 funds.forEach { KeyValue(it.name, when (it.kind) { FundKind.OPERATING -> "عملیاتی"; FundKind.RESERVE -> "اندوخته"; FundKind.OTHER -> "سایر" }) }
                 Divider()
@@ -206,12 +208,12 @@ private fun BuildingSettingsCard(vm: AppViewModel) {
         TextInput(S.address, address, { address = it })
         Text(S.displayCurrency, style = MaterialTheme.typography.labelMedium)
         SingleChoice(listOf(true, false), toman, { toman = it }) { if (it) S.showToman else S.showRial }
-        Text(S.calendar, style = MaterialTheme.typography.labelMedium)
-        SingleChoice(CalendarSystem.entries, cal, { cal = it }) { Fa.calendar(it) }
         // Set once, usually never touched: kept out of the way.
         var advanced by rememberSaveable { mutableStateOf(false) }
         androidx.compose.material3.TextButton(onClick = { advanced = !advanced }) { Text(S.advanced) }
         if (advanced) {
+            Text(S.calendar, style = MaterialTheme.typography.labelMedium)
+            SingleChoice(CalendarSystem.entries, cal, { cal = it }) { Fa.calendar(it) }
             Text(S.occupancyBasis, style = MaterialTheme.typography.labelMedium)
             SingleChoice(OccupancyBasis.entries, occ, { occ = it }) { Fa.occupancyBasis(it) }
             NumberInput(S.roundingIncrement, rounding, supporting = S.roundingHint)

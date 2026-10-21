@@ -73,11 +73,11 @@ class ExportBackupTest {
         val fundsExp = expected.getValue("funds").jsonObject
         assertEquals(fundsExp.getValue("عملیاتی").jsonPrimitive.long - draftExpenses, bal.funds.getValue(funds.first { it.name.contains("عملیاتی") }.id))
         assertEquals(fundsExp.getValue("اندوخته").jsonPrimitive.long, bal.funds.getValue(funds.first { it.name.contains("اندوخته") }.id))
-        // The current month is a draft blocked only by missing readings.
+        // The current month's only bill is not split by meter, so its missing readings don't hold it up.
         val draft = db.periodDao().periods(b).first { it.status == PeriodStatus.DRAFT }
         val preview = r.periods.preview(draft.id)
-        assertFalse(preview.canFinalize)
-        assertTrue(preview.blockingIssues.all { it.code.name.startsWith("MISSING") })
+        assertTrue(preview.blockingIssues.toString(), preview.canFinalize)
+        assertTrue(preview.water.issues.any { it.code.name.startsWith("MISSING") })
     }
 
     @Test

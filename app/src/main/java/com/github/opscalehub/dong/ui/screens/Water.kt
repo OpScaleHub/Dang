@@ -2,6 +2,8 @@ package com.github.opscalehub.dong.ui.screens
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -64,16 +66,38 @@ fun WaterScreen(vm: AppViewModel, nav: NavController) {
     var addingTariff by remember { mutableStateOf(false) }
     val superseded = readings.mapNotNull { it.supersedesId }.toSet()
 
+    val advanced by vm.ui.advanced.collectAsState()
+    val active = meters.filter { it.retiredOn == null }
+    val unmetered = units.filter { u -> u.active && active.none { it.role == MeterRole.UNIT && it.unitId == u.id } }
+    var splitByMeter by rememberSaveable { mutableStateOf(true) }
+
     WithFab(S.newMeter, { addingMeter = true }) {
         ScreenList {
-            item { SectionCard { Hint(S.waterHint) } }
+            item {
+                SectionCard {
+                    Hint(if (meters.isEmpty()) S.noMetersNeeded else if (advanced) S.waterHint else S.waterHintSimple)
+                    if (active.isNotEmpty()) Button(onClick = { nav.navigate(Routes.READINGS) }, Modifier.fillMaxWidth()) { Text(S.readingsBatch) }
+                }
+            }
+            // Meters are generated from the units, never added one at a time.
+            if (unmetered.isNotEmpty()) item {
+                SectionCard(S.generateMetersTitle, subtitle = S.generateMetersBody) {
+                    if (active.isNotEmpty()) Hint(S.generateMetersMissing.format(Fmt.number(unmetered.size.toLong())))
+                    com.github.opscalehub.dong.ui.SwitchRow(S.generateMetersSplit, splitByMeter, { splitByMeter = it })
+                    OutlinedButton(onClick = {
+                        vm.run { vm.message(S.generatedMeters.format(Fmt.number(vm.repos.water.generateMeters(building.id, splitByMeter).toLong()))) }
+                    }, Modifier.fillMaxWidth()) { Text(S.generateMetersButton) }
+                }
+            }
             preview?.water?.let { w ->
-                item {
-                    SectionCard("${S.reconciliation} — ${current?.name ?: ""}", subtitle = S.unallocatedNote) {
+                // Main meter vs the units' sum: only meaningful when both exist.
+                if (active.any { it.role == MeterRole.MAIN } && active.any { it.role == MeterRole.UNIT } && (w.mainLiters != null || advanced)) item {
+                    SectionCard("${S.reconciliation} — ${current?.name ?: ""}", subtitle = S.commonUseNote) {
                         KeyValue(S.mainConsumption, w.mainLiters?.let { "${Fmt.cubicMeters(it)} ${S.m3}" } ?: S.none)
                         KeyValue(S.unitsConsumption, "${Fmt.cubicMeters(w.unitSumLiters)} ${S.m3}")
                         KeyValue(S.unallocated, w.unallocatedLiters?.let { "${Fmt.cubicMeters(it)} ${S.m3}" } ?: S.none, strong = true)
-                        IssueList(w.issues.filter { it.blocking }, vm.names())
+                        // Only what actually holds up the month: readings nobody splits by are just reminders.
+                        IssueList(preview?.blockingIssues.orEmpty().filter { it in w.issues }, vm.names())
                     }
                 }
             }
@@ -84,13 +108,14 @@ fun WaterScreen(vm: AppViewModel, nav: NavController) {
                     ClickRow({ nav.navigate(Routes.meter(m.id)) }) {
                         Column(Modifier.weight(1f)) {
                             Text(m.label + if (m.retiredOn != null) " (${S.retired})" else "", style = MaterialTheme.typography.titleMedium)
-                            Hint(Fa.meterRole(m.role) + (m.unitId?.let { id -> "، ${S.unit} ${units.firstOrNull { it.id == id }?.label ?: ""}" } ?: ""))
+                            if (advanced) Hint(Fa.meterRole(m.role) + (m.unitId?.let { id -> "، ${S.unit} ${units.firstOrNull { it.id == id }?.label ?: ""}" } ?: ""))
                             Hint(S.lastReading + ": " + (last?.let { "${Fmt.cubicMeters(it.valueLiters)} ${S.m3} (${Fmt.date(it.readingDate, building.calendar)})" } ?: S.none))
                         }
                     }
                 }
             }
-            item {
+            // Official water tariffs are an advanced way to charge water.
+            if (advanced || tariffs.isNotEmpty()) item {
                 SectionCard(S.tariffs) {
                     if (tariffs.isEmpty()) Hint(S.empty)
                     val mf = LocalMoney.current
@@ -105,12 +130,12 @@ fun WaterScreen(vm: AppViewModel, nav: NavController) {
             }
         }
     }
-    if (addingMeter) MeterDialog(vm, building.id, units) { addingMeter = false }
+    if (addingMeter) MeterDialog(vm, building.id, units, advanced) { addingMeter = false }
     if (addingTariff) TariffDialog(vm, building.id) { addingTariff = false }
 }
 
 @Composable
-private fun MeterDialog(vm: AppViewModel, buildingId: String, units: List<UnitEntity>, close: () -> Unit) {
+private fun MeterDialog(vm: AppViewModel, buildingId: String, units: List<UnitEntity>, advanced: Boolean, close: () -> Unit) {
     var label by rememberSaveable { mutableStateOf("") }
     var role by remember { mutableStateOf(MeterRole.UNIT) }
     var unit by remember { mutableStateOf<UnitEntity?>(null) }
@@ -125,10 +150,13 @@ private fun MeterDialog(vm: AppViewModel, buildingId: String, units: List<UnitEn
     }, canConfirm = ok) {
         TextInput(S.meterLabel, label, { label = it })
         Text(S.meterRole, style = MaterialTheme.typography.labelMedium)
-        SingleChoice(MeterRole.entries, role, { role = it }) { Fa.meterRole(it) }
-        if (role == MeterRole.UNIT) Dropdown(S.unit, units.filter { it.active }, unit, { unit = it; if (label.isBlank()) label = "کنتور ${it.label}" }, { it.label })
-        TextInput(S.serial, serial, { serial = it })
-        NumberInput(S.rolloverLimit, limit, allowEmpty = true)
+        SingleChoice(if (advanced) MeterRole.entries else listOf(MeterRole.UNIT, MeterRole.MAIN), role, { role = it }) { Fa.meterRole(it) }
+        if (role == MeterRole.UNIT) Dropdown(S.unit, units.filter { it.active }, unit, { unit = it; if (label.isBlank()) label = "کنتور واحد ${it.label}" }, { it.label })
+        // Serial and counter limit are for unusual meters only.
+        if (advanced) {
+            TextInput(S.serial, serial, { serial = it })
+            NumberInput(S.rolloverLimit, limit, allowEmpty = true)
+        }
     }
 }
 

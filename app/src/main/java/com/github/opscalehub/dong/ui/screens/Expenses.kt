@@ -57,6 +57,7 @@ import com.github.opscalehub.dong.ui.NumberInput
 import com.github.opscalehub.dong.ui.PolicyEditor
 import com.github.opscalehub.dong.ui.ReasonDialog
 import com.github.opscalehub.dong.ui.Routes
+import com.github.opscalehub.dong.ui.LocalMoney
 import com.github.opscalehub.dong.ui.S
 import com.github.opscalehub.dong.ui.money
 import com.github.opscalehub.dong.ui.ScreenList
@@ -232,13 +233,7 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
                 // Simple mode: a few named choices with what each one means. Advanced mode adds the
                 // last-used policy and the full formula editor.
                 val last = expenses.filter { it.categoryId == category?.id && it.id != existing?.id && it.status == ExpenseStatus.ACTIVE }.maxByOrNull { it.createdAt }
-                val options = buildList {
-                    add(Triple(S.splitEqual, S.splitEqualHint, AllocationPolicy.single(Basis.Equal)))
-                    add(Triple(S.splitPeople, S.splitPeopleHint, AllocationPolicy.single(Basis.Occupants)))
-                    add(Triple(S.splitArea, S.splitAreaHint, AllocationPolicy.single(Basis.Area)))
-                    if (meters.isNotEmpty() || advancedMode) add(Triple(S.splitWater, S.splitWaterHint,
-                        AllocationPolicy.single(Basis.Consumption(CommonWater.Separate(com.github.opscalehub.dong.domain.allocation.SimpleBasis.EQUAL)))))
-                    add(Triple(S.splitFund, if (chargeItems.any { it.active }) S.splitFundHintFixed else S.splitFundHint, AllocationPolicy.FUND_ONLY))
+                val options = plainSplits(meters.isNotEmpty() || advancedMode, spaces.isNotEmpty(), chargeItems.any { it.active }) + buildList {
                     if (advancedMode) last?.let { add(Triple(S.presetLast, policySummary(it.policy()), it.policy())) }
                 }
                 // Multipliers: a weighted split edited as «۱×، ۲×…» per unit (e.g. elevator by floor).
@@ -341,6 +336,16 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
 
 }
 
+/** The named split choices of simple mode, each with what it means (expense form and expense types). */
+fun plainSplits(meters: Boolean, parking: Boolean, fixedCharge: Boolean) = buildList {
+    add(Triple(S.splitEqual, S.splitEqualHint, AllocationPolicy.single(Basis.Equal)))
+    add(Triple(S.splitPeople, S.splitPeopleHint, AllocationPolicy.single(Basis.Occupants)))
+    add(Triple(S.splitArea, S.splitAreaHint, AllocationPolicy.single(Basis.Area)))
+    if (meters) add(Triple(S.splitWater, S.splitWaterHint, com.github.opscalehub.dong.data.METERED_WATER))
+    if (parking) add(Triple(S.splitParking, S.splitParkingHint, AllocationPolicy.single(Basis.Parking())))
+    add(Triple(S.splitFund, if (fixedCharge) S.splitFundHintFixed else S.splitFundHint, AllocationPolicy.FUND_ONLY))
+}
+
 @Composable
 fun CategoriesScreen(vm: AppViewModel) {
     val b by vm.building.collectAsState()
@@ -349,19 +354,27 @@ fun CategoriesScreen(vm: AppViewModel) {
     val funds by vm.funds.collectAsState()
     val units by vm.units.collectAsState()
     val spaces by vm.spaces.collectAsState()
+    val meters by vm.meters.collectAsState()
+    val chargeItems by vm.chargeItems.collectAsState()
+    val advanced by vm.ui.advanced.collectAsState()
     var editing by remember { mutableStateOf<CategoryEntity?>(null) }
     var creating by remember { mutableStateOf(false) }
 
     WithFab(S.newCategory, { creating = true }) {
         ScreenList {
             item { SectionCard { Hint(S.policyChangeNote) } }
-            items(categories.size) { i ->
-                val c = categories[i]
+            // The hidden type that only carries the monthly charge is noise in simple mode.
+            val shown = if (advanced) categories else categories.filter { it.active || it.name != com.github.opscalehub.dong.data.MONTHLY_CHARGE }
+            items(shown.size) { i ->
+                val c = shown[i]
                 SectionCard {
                     ClickRow({ editing = c }) {
                         Column(Modifier.weight(1f)) {
                             Text(c.name + if (!c.active) " (${S.inactive})" else "", style = MaterialTheme.typography.titleMedium)
-                            Hint(policySummary(c.policy()) + "، " + (funds.firstOrNull { it.id == c.defaultFundId }?.name ?: ""))
+                            // The fund only matters when it is not the usual one.
+                            val fund = funds.firstOrNull { it.id == c.defaultFundId }
+                            Hint(splitName(c.policy(), meters.isNotEmpty(), spaces.isNotEmpty()) +
+                                if (advanced || fund?.kind != FundKind.OPERATING) "، " + (fund?.name ?: "") else "")
                         }
                         if (c.isWater) Badge(S.water)
                     }
@@ -383,12 +396,41 @@ fun CategoriesScreen(vm: AppViewModel) {
             }
         }, canConfirm = name.isNotBlank() && policy.toPolicy() != null) {
             TextInput(S.name, name, { name = it })
-            Dropdown(S.fund, funds, fund, { fund = it }, { it.name })
-            SwitchRow(S.isWater, water, { water = it })
+            if (advanced) {
+                Dropdown(S.fund, funds, fund, { fund = it }, { it.name })
+                SwitchRow(S.isWater, water, { water = it })
+            }
             SwitchRow(S.active, active, { active = it })
             Hint(S.policyChangeNote)
-            PolicyEditor(policy, units, spaces)
+            if (advanced) PolicyEditor(policy, units, spaces)
+            else {
+                // Simple mode: the same named choices as the expense form; anything else stays as it is.
+                Text(S.howToSplit, style = MaterialTheme.typography.labelLarge)
+                val pol = policy.toPolicy()
+                val opts = plainSplits(meters.isNotEmpty(), spaces.isNotEmpty(), chargeItems.any { it.active })
+                opts.forEach { (label, hint, p) -> SplitOption(label, hint, pol == p) { policy.reset(p) } }
+                if (pol != null && opts.none { it.third == pol }) SplitOption(splitName(pol, true, true), "", true) {}
+            }
         }
+    }
+}
+
+/** A policy in the words of the simple split choices, or the technical summary when it is none of them. */
+fun splitName(p: AllocationPolicy, meters: Boolean, parking: Boolean): String =
+    plainSplits(meters, parking, false).firstOrNull { it.third == p }?.first
+        ?: if ((p.components.singleOrNull()?.basis as? Basis.Weighted) != null) S.splitWeighted else policySummary(p)
+
+/** «هر واحد ماهی ۵۰۰٬۰۰۰ تومان»: a monthly charge as the residents would say it. */
+@Composable
+private fun chargeSummary(c: ChargeItemEntity): String? {
+    if (c.mode != ChargeMode.RATE) return null
+    val amount = LocalMoney.current.withUnit(c.amountMinor)
+    return when (c.policy().components.singleOrNull()?.basis) {
+        Basis.Equal -> S.chargePerUnitMonthly.format(amount)
+        Basis.Occupants -> S.chargePerPersonMonthly.format(amount)
+        Basis.Area -> S.chargePerM2Monthly.format(amount)
+        is Basis.Weighted -> S.chargeWeightedMonthly.format(amount)
+        else -> null
     }
 }
 
@@ -405,17 +447,21 @@ fun ChargeItemsScreen(vm: AppViewModel) {
     var editing by remember { mutableStateOf<ChargeItemEntity?>(null) }
     var creating by remember { mutableStateOf(false) }
 
-    WithFab(S.newChargeItem, { creating = true }) {
+    val advanced by vm.ui.advanced.collectAsState()
+    WithFab(if (advanced) S.newChargeItem else null, { creating = true }) {
         ScreenList {
             if (items.isEmpty()) item { SectionCard { Hint(S.empty) } }
+            if (!advanced) item { SectionCard { Hint(S.chargeEditHint) } }
             items(items.size) { i ->
                 val c = items[i]
                 SectionCard {
                     ClickRow({ editing = c }) {
                         Column(Modifier.weight(1f)) {
                             Text(c.name + if (!c.active) " (${S.inactive})" else "", style = MaterialTheme.typography.titleMedium)
-                            Hint("${Fa.chargeMode(c.mode)}، ${if (c.mode != ChargeMode.WATER_TARIFF) money(c.amountMinor) else ""}، ${policySummary(c.policy())}")
-                            Hint("${S.effectiveFrom} ${Fmt.date(c.activeFrom, building.calendar)}" + (c.activeTo?.let { " ${S.effectiveTo} ${Fmt.date(it, building.calendar)}" } ?: ""))
+                            val plain = chargeSummary(c)
+                            if (plain != null && !advanced) Text(plain, style = MaterialTheme.typography.bodyLarge)
+                            else Hint("${Fa.chargeMode(c.mode)}، ${if (c.mode != ChargeMode.WATER_TARIFF) money(c.amountMinor) else ""}، ${policySummary(c.policy())}")
+                            if (advanced || c.activeTo != null) Hint("${S.effectiveFrom} ${Fmt.date(c.activeFrom, building.calendar)}" + (c.activeTo?.let { " ${S.effectiveTo} ${Fmt.date(it, building.calendar)}" } ?: ""))
                         }
                     }
                 }
@@ -424,6 +470,19 @@ fun ChargeItemsScreen(vm: AppViewModel) {
     }
     val target = editing ?: if (creating) ChargeItemEntity(newId(), building.id, "", categories.firstOrNull()?.id ?: "", funds.firstOrNull()?.id ?: "", ChargeMode.TOTAL, 0,
         AllocationPolicy().encode(), activeFrom = vm.today) else null
+    // Simple mode: only the amount changes. Closed months keep what they charged; open ones use the new amount.
+    if (target != null && !advanced) {
+        val amount = rememberMoney(target.amountMinor)
+        val close = { editing = null; creating = false }
+        FormDialog(target.name, close, {
+            vm.run(S.saved, onSuccess = close) { vm.repos.expenses.saveChargeItem(target.copy(amountMinor = amount.value!!)) }
+        }, canConfirm = amount.valid && (amount.value ?: 0) > 0) {
+            chargeSummary(target)?.let { Hint(it) }
+            NumberInput(S.newMonthlyAmount, amount)
+            Hint(S.chargeChangeNote)
+        }
+        return
+    }
     if (target != null) {
         var name by rememberSaveable(target.id) { mutableStateOf(target.name) }
         var cat by remember(target.id) { mutableStateOf(categories.firstOrNull { it.id == target.categoryId }) }

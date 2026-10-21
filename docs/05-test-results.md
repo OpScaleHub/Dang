@@ -168,3 +168,11 @@ nothing else on the phone was touched.
 | Unit + Robolectric incl. combined charge (m² + person rates add up; one bill line «شارژ ماهانه»), per-unit multipliers and their validation, engine rate × multiplier | 137 tests, 0 failures |
 | Instrumented E2E | 1/1 pass |
 | Emulator by hand: wizard «ترکیبی» with live example, «همه واحدها یک اندازه نیستند» with «بر اساس طبقه»; elevator bill «با ضریب برای هر واحد» by floor → preview 166,700 / 166,700 / 333,300 / 333,300 for 1,000,000 Toman | OK |
+
+## 0.4.2 — generated meters and parking, simpler menu
+
+| Check | Result |
+|---|---|
+| Unit + Robolectric incl. setup with unit meters + parking + shared gas, «own water» building then meters generated later, parking sale between units (freed space reused), meters that nobody splits by never block a month | 141 tests, 0 failures |
+| Instrumented E2E (wizard now picks unit water meters; asserts 3 meters and 2 parking spaces) | 1/1 pass |
+| Emulator by hand: 4×2 building → 9 meters and 8 parking spaces from the wizard; month closable without readings; shared-water building → «ساختن کنتور برای همه واحدها» made 9 meters; unit edit with residents and parking; simple «شارژ ماهانه», «انواع هزینه», parking, settings, readings screens | OK |

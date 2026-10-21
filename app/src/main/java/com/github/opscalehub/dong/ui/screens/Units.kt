@@ -80,6 +80,9 @@ import com.github.opscalehub.dong.ui.rememberDate
 fun currentOccupants(records: List<OccupancyEntity>, today: Long): Map<String, Int> =
     records.groupBy { it.unitId }.mapValues { (_, l) -> l.filter { it.effectiveFrom <= today }.maxByOrNull { it.effectiveFrom }?.occupantCount ?: 0 }
 
+/** «، ۲ پارکینگ» for the unit's summary line; nothing when it has none. */
+private fun parkingText(n: Int) = if (n > 0) "، ${Fmt.number(n.toLong())} ${S.parkingLabel}" else ""
+
 private enum class UnitFilter { ALL, OWES, SETTLED }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -89,6 +92,7 @@ fun UnitsScreen(vm: AppViewModel, nav: NavController, collect: Boolean = false) 
     val building = b ?: return
     val units by vm.units.collectAsState()
     val occ by vm.occupancy.collectAsState()
+    val assignments by vm.assignments.collectAsState()
     val report by derived(vm, building.id) { vm.reports.load(building.id) }
     var adding by remember { mutableStateOf(false) }
     var filter by remember { mutableStateOf(if (collect) UnitFilter.OWES else UnitFilter.ALL) }
@@ -159,7 +163,8 @@ fun UnitsScreen(vm: AppViewModel, nav: NavController, collect: Boolean = false) 
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text("${S.unit} ${u.label}" + if (!u.active) " (${S.inactive})" else "", style = MaterialTheme.typography.titleMedium)
-                            Hint("${S.floor} ${Fmt.number(u.floor.toLong())}، ${Fa.quantity(QuantityKind.AREA_CENTI_M2, u.areaCentiM2)}، ${Fmt.number((current[u.id] ?: 0).toLong())} ${S.people}")
+                            Hint("${S.floor} ${Fmt.number(u.floor.toLong())}، ${Fa.quantity(QuantityKind.AREA_CENTI_M2, u.areaCentiM2)}، ${Fmt.number((current[u.id] ?: 0).toLong())} ${S.people}" +
+                                parkingText(assignments.count { it.unitId == u.id && it.effectiveTo == null }))
                         }
                         BalanceText(balances[u.id] ?: 0)
                     }
@@ -173,27 +178,45 @@ fun UnitsScreen(vm: AppViewModel, nav: NavController, collect: Boolean = false) 
     if (payingAny) PaymentDialog(vm, building.id, units, building.calendar, 0, close = { payingAny = false })
 }
 
+/**
+ * Add or edit a unit. Residents and parking are edited here too, as plain numbers: a change is
+ * recorded from today (history is kept, closed months are unaffected), so a sale of a parking
+ * space or a new resident needs no other screen.
+ */
 @Composable
 private fun UnitDialog(vm: AppViewModel, unit: UnitEntity?, buildingId: String, close: () -> Unit) {
+    val occ by vm.occupancy.collectAsState()
+    val assignments by vm.assignments.collectAsState()
+    val nowPeople = unit?.let { currentOccupants(occ, vm.today)[it.id] } ?: 1
+    val nowParking = unit?.let { u -> assignments.count { it.unitId == u.id && it.effectiveTo == null } } ?: 0
     var label by rememberSaveable { mutableStateOf(unit?.label ?: "") }
     val floor = rememberCount(unit?.floor?.toLong() ?: 1)
     val area = rememberCubic(unit?.areaCentiM2?.times(10))
     var active by rememberSaveable { mutableStateOf(unit?.active ?: true) }
     var notes by rememberSaveable { mutableStateOf(unit?.notes ?: "") }
-    val initialOcc = rememberCount(if (unit == null) 1 else null)
+    val people = rememberCount(nowPeople.toLong())
+    var parking by rememberSaveable { mutableStateOf(nowParking) }
     val areaCenti = area.value?.let { it / 10 }
     FormDialog(if (unit == null) S.newUnit else S.editUnit, close, {
         vm.run(S.saved, onSuccess = close) {
             val e = unit?.copy(label = label, floor = floor.value!!.toInt(), areaCentiM2 = areaCenti!!, active = active, notes = notes)
                 ?: UnitEntity(newId(), buildingId, floor.value!!.toInt(), label, areaCenti!!, active, notes, vm.repos.buildings.nextUnitSortOrder(buildingId))
-            vm.repos.buildings.saveUnit(e)
-            if (unit == null) initialOcc.value?.let { vm.repos.buildings.setOccupancy(e.id, vm.today - 3650, it.toInt()) }
+            vm.repos.tx {
+                vm.repos.buildings.saveUnit(e)
+                val n = people.value!!.toInt()
+                if (unit == null) vm.repos.buildings.setOccupancy(e.id, vm.today - 3650, n)
+                else if (n != nowPeople) vm.repos.buildings.setOccupancy(e.id, vm.today, n)
+                if (parking != nowParking) vm.repos.buildings.setParkingCount(e.id, parking, vm.today)
+            }
         }
-    }, canConfirm = label.isNotBlank() && floor.valid && areaCenti != null && (unit != null || initialOcc.valid)) {
+    }, canConfirm = label.isNotBlank() && floor.valid && areaCenti != null && (people.value ?: -1) >= 0) {
         TextInput(S.unitLabel, label, { label = it }, error = if (label.isBlank()) S.required else null)
         NumberInput(S.floor, floor)
         NumberInput(S.area, area)
-        if (unit == null) NumberInput(S.occupants, initialOcc, supporting = S.occupancyHint)
+        NumberInput(S.occupants, people, supporting = if (unit == null) null else S.occupancyFromToday)
+        Text(S.parkingLabel, style = MaterialTheme.typography.labelLarge)
+        SingleChoice((0..maxOf(3, nowParking)).toList(), parking, { parking = it }) { if (it == 0) S.noParking else Fmt.number(it.toLong()) }
+        if (unit != null && parking != nowParking) Hint(S.parkingFromToday)
         SwitchRow(S.active, active, { active = it }, S.unitActiveHint)
         TextInput(S.residentNotesHint, notes, { notes = it }, singleLine = false)
     }
@@ -232,7 +255,8 @@ fun UnitScreen(vm: AppViewModel, nav: NavController, unitId: String) {
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text("${S.unit} ${unit.label}", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Hint("${S.floor} ${Fmt.number(unit.floor.toLong())}، ${Fa.quantity(QuantityKind.AREA_CENTI_M2, unit.areaCentiM2)}، ${Fmt.number((currentOccupants(occ, vm.today)[unit.id] ?: 0).toLong())} ${S.people}")
+                        Hint("${S.floor} ${Fmt.number(unit.floor.toLong())}، ${Fa.quantity(QuantityKind.AREA_CENTI_M2, unit.areaCentiM2)}، ${Fmt.number((currentOccupants(occ, vm.today)[unit.id] ?: 0).toLong())} ${S.people}" +
+                            parkingText(assignments.count { it.unitId == unit.id && it.effectiveTo == null }))
                     }
                 }
                 Text(

@@ -162,22 +162,22 @@ object Fa {
             IssueCode.ZERO_BASIS -> "مجموع مبنای تسهیم صفر است (مثلاً هیچ ساکن، مصرف یا وزنی ثبت نشده)."
             IssueCode.MISSING_AREA -> "متراژ واحد ${n.unit(i.unitId)} ثبت نشده است."
             IssueCode.MISSING_OCCUPANCY -> "تعداد ساکنان واحد ${n.unit(i.unitId)} ثبت نشده است."
-            IssueCode.MISSING_CONSUMPTION -> "مصرف آب واحد ${n.unit(i.unitId)} در دسترس نیست (کنتور یا قرائت ناقص)."
+            IssueCode.MISSING_CONSUMPTION -> "مصرف آب واحد ${n.unit(i.unitId)} این ماه معلوم نیست: شماره کنتورش در شروع و پایان ماه لازم است. اگر کنتورها تازه راه افتاده‌اند، این ماه روش تقسیم دیگری انتخاب کنید."
             IssueCode.EXPLICIT_SUM_MISMATCH -> "جمع مبالغ مشخص‌شده (${Fmt.money(a["actual"]?.toLong() ?: 0)}) با مبلغ (${Fmt.money(a["expected"]?.toLong() ?: 0)}) برابر نیست."
             IssueCode.PORTIONS_EXCEED_AMOUNT -> "مجموع بخش‌های ثابت/درصدی از مبلغ کل بیشتر است."
             IssueCode.PORTIONS_INCOMPLETE -> "بخش‌های تسهیم کل مبلغ را پوشش نمی‌دهند (یک بخش «باقیمانده» لازم است)."
             IssueCode.INVALID_PERCENT -> "درصد نامعتبر است."
             IssueCode.NEGATIVE_AMOUNT -> "مبلغ یا وزن منفی مجاز نیست."
             IssueCode.UNKNOWN_UNIT_IN_POLICY -> "سیاست تسهیم به واحدی اشاره دارد که وجود ندارد یا غیرفعال است (${n.unit(i.unitId)})."
-            IssueCode.MAIN_METER_REQUIRED -> "برای جدا کردن سهم مشترک آب، قرائت کامل کنتور اصلی لازم است."
+            IssueCode.MAIN_METER_REQUIRED -> "برای جدا کردن مصرف مشاعات، شماره کنتور اصلی در شروع و پایان ماه لازم است."
             IssueCode.UNIT_METERS_EXCEED_MAIN -> "مجموع مصرف کنتورهای واحدها از کنتور اصلی بیشتر است (${Fmt.cubicMeters(a["liters"]?.toLong() ?: 0)} مترمکعب)."
             IssueCode.RATE_BASIS_UNSUPPORTED -> "برای شارژ نرخ ثابت فقط مبنای مساوی، ساکنان، متراژ یا پارکینگ مجاز است."
             IssueCode.PARKING_SPACES_EXCLUDED -> "${Fmt.digits(a["count"] ?: "0")} جای پارک مشمول این هزینه نشد (بدون تخصیص، بلااستفاده یا خارج از فیلتر)."
             IssueCode.UNIT_ZERO_WEIGHT -> "سهم واحد ${n.unit(i.unitId)} صفر است (مبنا صفر)."
             IssueCode.FUND_BORNE_PORTION -> "مبلغ ${Fmt.money(a["amount"]?.toLong() ?: 0)} از محل صندوق پرداخت می‌شود و به واحدها شارژ نمی‌شود."
-            IssueCode.MISSING_READING -> "برای ${n.meter(i.meterId)} هیچ قرائتی ثبت نشده است."
-            IssueCode.MISSING_OPENING_READING -> "قرائت ابتدای ماه برای ${n.meter(i.meterId)} وجود ندارد (یک قرائت قبل از این ماه یا «قرائت اولیه» لازم است)."
-            IssueCode.MISSING_CLOSING_READING -> "قرائت پایان ماه برای ${n.meter(i.meterId)} ثبت نشده است."
+            IssueCode.MISSING_READING -> "برای ${n.meter(i.meterId)} هنوز هیچ شماره‌ای ثبت نشده است (از «ثبت کنتورها»)."
+            IssueCode.MISSING_OPENING_READING -> "شماره شروع ماه برای ${n.meter(i.meterId)} نیست. اولین شماره‌ای که ثبت شود، شروع کار کنتور حساب می‌شود."
+            IssueCode.MISSING_CLOSING_READING -> "شماره پایان ماه برای ${n.meter(i.meterId)} ثبت نشده است (از «ثبت کنتورها»)."
             IssueCode.NEGATIVE_CONSUMPTION -> "قرائت ${n.meter(i.meterId)} از قرائت قبلی کمتر است (${Fmt.cubicMeters(a["current"]?.toLong() ?: 0)} < ${Fmt.cubicMeters(a["previous"]?.toLong() ?: 0)}). اگر کنتور تعویض یا صفر شده یا گردش کرده، نوع قرائت را مشخص کنید."
             IssueCode.ROLLOVER_WITHOUT_LIMIT -> "برای ${n.meter(i.meterId)} گردش کنتور ثبت شده ولی حداکثر شمارنده تعریف نشده است."
             IssueCode.READING_AFTER_FINAL -> "پس از قرائت نهایی ${n.meter(i.meterId)} قرائت دیگری ثبت شده است."
@@ -199,7 +199,7 @@ object Fa {
         code.startsWith("RESTORE_") -> "بازیابی از پشتیبان"
         else -> mapOf(
             "CREATE_BUILDING" to "ایجاد ساختمان", "UPDATE_SETTINGS" to "تغییر تنظیمات", "CREATE_UNIT" to "ایجاد واحد", "UPDATE_UNIT" to "ویرایش واحد",
-            "SET_OCCUPANCY" to "تغییر تعداد ساکنان", "DELETE_OCCUPANCY" to "حذف سابقه سکونت", "SAVE_PARKING_SPACE" to "ثبت جای پارک",
+            "SET_OCCUPANCY" to "تغییر تعداد ساکنان", "DELETE_OCCUPANCY" to "حذف سابقه سکونت", "SAVE_PARKING_SPACE" to "ثبت جای پارک", "END_PARKING" to "واگذاری جای پارک",
             "ASSIGN_PARKING" to "تخصیص پارکینگ", "SAVE_METER" to "ثبت کنتور", "ADD_READING" to "ثبت قرائت", "CORRECT_READING" to "اصلاح قرائت",
             "DELETE_READING" to "حذف قرائت", "REPLACE_METER" to "تعویض کنتور", "SAVE_TARIFF" to "ثبت تعرفه", "SAVE_CATEGORY" to "ثبت دسته هزینه",
             "UPDATE_EXPENSE" to "ویرایش هزینه", "VOID_EXPENSE" to "ابطال هزینه", "SAVE_CHARGE_ITEM" to "ثبت شارژ ثابت", "CREATE_PERIOD" to "ساختن ماه",

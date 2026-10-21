@@ -37,9 +37,17 @@ class PeriodTest {
     }
 
     @Test
-    fun `missing meter reading blocks finalization`() {
-        val r = PeriodCalculator.calculate(Fixtures.input().copy(readings = Fixtures.readings.filter { it.id != "r21" }))
+    fun `missing meter reading blocks finalization when a bill is split by meter`() {
+        val r = PeriodCalculator.calculate(Fixtures.input().copy(readings = Fixtures.readings.filter { it.id != "r21" },
+            expenses = listOf(exp("w", 1_000_000, Basis.Consumption()))))
         assertTrue(r.blockingIssues.any { it.code == IssueCode.MISSING_CLOSING_READING && it.meterId == "M-42" })
+    }
+
+    @Test
+    fun `a meter nobody splits by never holds up the month`() {
+        val r = PeriodCalculator.calculate(Fixtures.input().copy(readings = emptyList(), expenses = listOf(exp("e", 900_000))))
+        assertTrue(r.canFinalize)
+        assertEquals(900_000L, r.total)
     }
 
     @Test

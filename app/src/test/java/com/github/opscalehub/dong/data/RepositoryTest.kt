@@ -398,4 +398,55 @@ class RepositoryTest {
         val ids = w.db.buildingDao().units(b).sortedBy { it.sortOrder }.map { it.id }
         assertEquals(listOf(1_000_000L, 3_000_000L), ids.map { units.getValue(it) })
     }
+
+    @Test
+    fun `setup with unit water meters and parking creates them all at once`() = runBlocking {
+        val w = world()
+        val units = listOf(BuildingRepository.UnitDraft("۱-۱", 1, 6_000, 2, parking = 1), BuildingRepository.UnitDraft("۱-۲", 1, 8_000, 3, parking = 2),
+            BuildingRepository.UnitDraft("۲-۱", 2, 0, 1))
+        val b = w.r.buildings.setup("کنتوری", "", true, 1000, units, 0, 0, BuildingRepository.ChargePlan.Fixed(BuildingRepository.FixedBasis.PER_UNIT, 1_000_000),
+            BuildingRepository.SharedBills(BuildingRepository.WaterSetup.METERED, gas = true))
+        val ids = w.db.buildingDao().units(b).sortedBy { it.sortOrder }.map { it.id }
+        val meters = w.db.waterDao().meters(b)
+        assertEquals(1, meters.count { it.role == com.github.opscalehub.dong.domain.model.MeterRole.MAIN })
+        assertEquals(ids.toSet(), meters.mapNotNull { it.unitId }.toSet())
+        val cats = w.db.expenseDao().categories(b).associateBy { it.name }
+        // Metered water is charged by reading even with a fixed monthly charge; gas without areas goes equally.
+        assertEquals(METERED_WATER, cats.getValue("آب").policy())
+        assertTrue(cats.getValue("گاز").policy().fundOnly)
+        assertTrue("برق مشاعات" in cats)
+        val spaces = w.db.buildingDao().spaces(b)
+        assertEquals(listOf("۱", "۲", "۳"), spaces.map { it.label }.sorted())
+        val open = w.db.buildingDao().assignments(b).filter { it.effectiveTo == null }
+        assertEquals(listOf(1, 2, 0), ids.map { id -> open.count { it.unitId == id } })
+        // Running the generator again adds nothing.
+        assertEquals(0, w.r.water.generateMeters(b))
+    }
+
+    @Test
+    fun `a building whose units pay their own water has no water type and gets meters later`() = runBlocking {
+        val w = world()
+        val b = w.r.buildings.setup("بی‌آب", "", true, 1000, drafts, 0, 0, BuildingRepository.ChargePlan.SplitBills,
+            BuildingRepository.SharedBills(BuildingRepository.WaterSetup.OWN))
+        assertTrue(w.db.expenseDao().categories(b).none { it.isWater })
+        assertEquals(3, w.r.water.generateMeters(b)) // main + two units
+        assertEquals(METERED_WATER, w.db.expenseDao().categories(b).single { it.isWater }.policy())
+    }
+
+    @Test
+    fun `parking count follows a sale from one unit to another`() = runBlocking {
+        val w = world()
+        val b = w.r.buildings.setup("پارکینگ", "", true, 1000, drafts.mapIndexed { i, d -> d.copy(parking = if (i == 0) 2 else 0) }, 0, 0)
+        val (a, c) = w.db.buildingDao().units(b).sortedBy { it.sortOrder }.map { it.id }
+        val day = w.clock.today()
+        w.r.buildings.setParkingCount(a, 1, day)   // sells one…
+        w.r.buildings.setParkingCount(c, 1, day)   // …and the neighbour buys it: the freed space is reused
+        assertEquals(2, w.db.buildingDao().spaces(b).size)
+        val open = w.db.buildingDao().assignments(b).filter { it.effectiveTo == null }
+        assertEquals(1, open.count { it.unitId == a })
+        assertEquals(1, open.count { it.unitId == c })
+        w.r.buildings.setParkingCount(c, 2, day)
+        assertEquals(listOf("۱", "۲", "۳"), w.db.buildingDao().spaces(b).map { it.label }.sorted())
+        expectError(OpError.INVALID_INPUT) { w.r.buildings.setParkingCount(c, -1, day) }
+    }
 }

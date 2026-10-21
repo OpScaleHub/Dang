@@ -89,15 +89,17 @@ fun WelcomeScreen(vm: AppViewModel) {
 }
 
 /** One editable unit row in the wizard; all fields stay text until [toDraft]. */
-data class UnitRow(val label: String, val floor: String, val area: String, val occupants: String) {
+data class UnitRow(val label: String, val floor: String, val area: String, val occupants: String, val parking: Int = 0) {
     /** Area may be left empty (unknown); everything else is required. */
     val valid: Boolean get() = label.isNotBlank() && Fmt.parseLong(floor) != null && (area.isBlank() || Fmt.parseCubicMeters(area) != null) &&
         Fmt.parseLong(occupants)?.let { it >= 0 } == true
-    fun toDraft() = BuildingRepository.UnitDraft(label.trim(), Fmt.parseLong(floor)!!.toInt(), (Fmt.parseCubicMeters(area) ?: 0) / 10, Fmt.parseLong(occupants)!!.toInt())
+    fun toDraft() = BuildingRepository.UnitDraft(label.trim(), Fmt.parseLong(floor)!!.toInt(), (Fmt.parseCubicMeters(area) ?: 0) / 10, Fmt.parseLong(occupants)!!.toInt(), parking)
 }
 
 /**
- * Four plain steps, one decision each: name → units → how the building charges → cash on hand.
+ * Five plain steps, one decision each: name → units (with parking) → which bills are shared (and
+ * whether units have their own water meters) → how the building charges → cash on hand.
+ * Meters and parking spaces are generated from the units, never added one by one.
  * Technical settings (rounding, currency) keep their defaults and live in advanced settings.
  * Creates everything atomically.
  */
@@ -109,6 +111,9 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
     val floors = rememberCount(4)
     val perFloor = rememberCount(2)
     val rows = remember { mutableStateListOf<UnitRow>() }
+    var parkingAll by rememberSaveable { mutableIntStateOf(1) }
+    var water by rememberSaveable { mutableStateOf(BuildingRepository.WaterSetup.SHARED) }
+    var gas by rememberSaveable { mutableStateOf(false) }
     var fixed by rememberSaveable { mutableStateOf<Boolean?>(null) }
     var basis by rememberSaveable { mutableStateOf(BuildingRepository.FixedBasis.PER_UNIT) }
     val mf = MoneyFormat(0, 10, S.showToman)
@@ -136,7 +141,7 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
     val planValid = fixed == false || (fixed == true && plan().let { p ->
         p.perUnit + p.perPerson + p.perM2 > 0 && (p.perM2 == 0L || areasKnown) && (p.unitWeights?.any { it > 0 } ?: true)
     })
-    val titles = listOf(S.setupStep1, S.setupStep2, S.setupStepCharge, S.setupStep3)
+    val titles = listOf(S.setupStep1, S.setupStep2, S.setupStepBills, S.setupStepCharge, S.setupStep3)
 
     Column(Modifier.fillMaxWidth()) {
         LinearProgressIndicator(progress = { (step + 1) / titles.size.toFloat() }, modifier = Modifier.fillMaxWidth())
@@ -158,16 +163,33 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
                             OutlinedButton(onClick = {
                                 rows.clear()
                                 for (f in 1..(floors.value ?: 0).toInt().coerceIn(0, 60)) for (u in 1..(perFloor.value ?: 0).toInt().coerceIn(0, 20)) {
-                                    rows += UnitRow(Fmt.digits("$f-$u"), f.toString(), "", "2")
+                                    rows += UnitRow(Fmt.digits("$f-$u"), f.toString(), "", "2", parkingAll)
                                 }
                             }) { Text(S.generateUnitsButton) }
+                            Text(S.parkingForAll, style = MaterialTheme.typography.labelLarge)
+                            ParkingChips(parkingAll) { n -> parkingAll = n; rows.indices.forEach { rows[it] = rows[it].copy(parking = n) } }
                             Hint(S.unitsHint)
                         }
                     }
                     items(rows.size) { i -> UnitRowEditor(rows[i], onChange = { rows[i] = it }, onRemove = { rows.removeAt(i) }) }
-                    item { TextButton(onClick = { rows += UnitRow("", "1", "", "2") }) { Text(S.addRow) } }
+                    item { TextButton(onClick = { rows += UnitRow("", "1", "", "2", parkingAll) }) { Text(S.addRow) } }
                 }
                 2 -> ScreenList {
+                    item { Text(S.billsQuestion, style = MaterialTheme.typography.titleMedium) }
+                    item { Hint(S.billsHint) }
+                    item { Text(S.waterLabel, style = MaterialTheme.typography.titleSmall) }
+                    item { ChoiceCard(S.waterShared, S.waterSharedHint, water == BuildingRepository.WaterSetup.SHARED) { water = BuildingRepository.WaterSetup.SHARED } }
+                    item {
+                        ChoiceCard(S.waterMetered, S.waterMeteredHint + "\n" + S.meteredFirstReading, water == BuildingRepository.WaterSetup.METERED) {
+                            water = BuildingRepository.WaterSetup.METERED
+                        }
+                    }
+                    item { ChoiceCard(S.waterOwn, S.waterOwnHint, water == BuildingRepository.WaterSetup.OWN) { water = BuildingRepository.WaterSetup.OWN } }
+                    item { Text(S.gasLabel, style = MaterialTheme.typography.titleSmall) }
+                    item { ChoiceCard(S.gasOwn, "", !gas) { gas = false } }
+                    item { ChoiceCard(S.gasShared, S.gasSharedHint, gas) { gas = true } }
+                }
+                3 -> ScreenList {
                     item { Text(S.chargeQuestion, style = MaterialTheme.typography.titleMedium) }
                     item {
                         ChoiceCard(S.chargeFixedTitle, S.chargeFixedBody, fixed == true) { fixed = true }
@@ -205,6 +227,7 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
                             else if (rows.isNotEmpty() && p.perUnit + p.perPerson + p.perM2 > 0) Text(S.exampleShare.format(rows[0].label, mf.withUnit(exampleFor(0))),
                                 style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                             Hint(S.chargeFixedNote)
+                            if (water == BuildingRepository.WaterSetup.METERED) Hint(S.chargeMeteredNote)
                         }
                     }
                     item {
@@ -224,11 +247,13 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
             when (step) {
                 0 -> Button(onClick = { step = 1 }, enabled = name.isNotBlank()) { Text(S.next) }
                 1 -> Button(onClick = { step = 2 }, enabled = unitsValid) { Text(S.next) }
-                2 -> Button(onClick = { step = 3 }, enabled = planValid) { Text(S.next) }
+                2 -> Button(onClick = { step = 3 }) { Text(S.next) }
+                3 -> Button(onClick = { step = 4 }, enabled = planValid) { Text(S.next) }
                 else -> Button(onClick = {
                     vm.run(S.saved, onSuccess = onDone) {
                         val plan = if (fixed == true) plan() else BuildingRepository.ChargePlan.SplitBills
-                        val id = vm.repos.buildings.setup(name, address, true, 1000, rows.map { it.toDraft() }, cash.value ?: 0, 0, plan)
+                        val id = vm.repos.buildings.setup(name, address, true, 1000, rows.map { it.toDraft() }, cash.value ?: 0, 0, plan,
+                            BuildingRepository.SharedBills(water, gas))
                         vm.select(id)
                     }
                 }, enabled = cash.valid) { Text(S.finish) }
@@ -252,21 +277,32 @@ private fun ChoiceCard(title: String, body: String, selected: Boolean, onClick: 
             Spacer(Modifier.width(8.dp))
             Column {
                 Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (body.isNotBlank()) Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
 
+/** «ندارد، ۱، ۲، ۳» parking spaces. */
+@Composable
+private fun ParkingChips(count: Int, onChange: (Int) -> Unit) =
+    SingleChoice((0..3).toList(), count, onChange) { if (it == 0) S.noParking else Fmt.number(it.toLong()) }
+
 @Composable
 private fun UnitRowEditor(r: UnitRow, onChange: (UnitRow) -> Unit, onRemove: () -> Unit) {
     val num = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        OutlinedTextField(r.label, { onChange(r.copy(label = it)) }, Modifier.weight(1.1f), label = { Text(S.unit) }, singleLine = true, isError = r.label.isBlank())
-        OutlinedTextField(r.floor, { onChange(r.copy(floor = it)) }, Modifier.weight(0.8f), label = { Text(S.floor) }, singleLine = true, keyboardOptions = num, visualTransformation = PersianDigitsTransformation)
-        OutlinedTextField(r.area, { onChange(r.copy(area = it)) }, Modifier.weight(1f), label = { Text(S.areaShort) }, singleLine = true, keyboardOptions = num, visualTransformation = PersianDigitsTransformation)
-        OutlinedTextField(r.occupants, { onChange(r.copy(occupants = it)) }, Modifier.weight(0.8f), label = { Text(S.people) }, singleLine = true, keyboardOptions = num, visualTransformation = PersianDigitsTransformation)
-        TextButton(onClick = onRemove, modifier = Modifier.width(48.dp)) { Text("✕") }
+    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(r.label, { onChange(r.copy(label = it)) }, Modifier.weight(1.1f), label = { Text(S.unit) }, singleLine = true, isError = r.label.isBlank())
+            OutlinedTextField(r.floor, { onChange(r.copy(floor = it)) }, Modifier.weight(0.8f), label = { Text(S.floor) }, singleLine = true, keyboardOptions = num, visualTransformation = PersianDigitsTransformation)
+            OutlinedTextField(r.area, { onChange(r.copy(area = it)) }, Modifier.weight(1f), label = { Text(S.areaShort) }, singleLine = true, keyboardOptions = num, visualTransformation = PersianDigitsTransformation)
+            OutlinedTextField(r.occupants, { onChange(r.copy(occupants = it)) }, Modifier.weight(0.8f), label = { Text(S.people) }, singleLine = true, keyboardOptions = num, visualTransformation = PersianDigitsTransformation)
+            TextButton(onClick = onRemove, modifier = Modifier.width(48.dp)) { Text("✕") }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(S.parkingLabel, style = MaterialTheme.typography.labelLarge)
+            ParkingChips(r.parking) { onChange(r.copy(parking = it)) }
+        }
     }
 }
 
