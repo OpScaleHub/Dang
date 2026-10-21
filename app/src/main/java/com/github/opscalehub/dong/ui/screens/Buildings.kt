@@ -113,10 +113,29 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
     var basis by rememberSaveable { mutableStateOf(BuildingRepository.FixedBasis.PER_UNIT) }
     val mf = MoneyFormat(0, 10, S.showToman)
     val rate = remember { NumberFieldState("", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
+    val rateM2 = remember { NumberFieldState("", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
+    val ratePeople = remember { NumberFieldState("", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
+    val rateBase = remember { NumberFieldState("", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
+    var differ by rememberSaveable { mutableStateOf(false) }
+    val weights = remember { mutableStateListOf<Long>() }
     val cash = remember { NumberFieldState("0", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
     val unitsValid = rows.isNotEmpty() && rows.all { it.valid } && rows.map { it.label.trim() }.toSet().size == rows.size
     val areasKnown = rows.all { (Fmt.parseCubicMeters(it.area) ?: 0) > 0 }
-    val planValid = fixed == false || (fixed == true && (rate.value ?: 0) > 0 && (basis != BuildingRepository.FixedBasis.PER_M2 || areasKnown))
+    fun plan(): BuildingRepository.ChargePlan.Fixed = when (basis) {
+        BuildingRepository.FixedBasis.PER_UNIT -> BuildingRepository.ChargePlan.Fixed(perUnit = rate.value ?: 0,
+            unitWeights = if (differ) rows.indices.map { weights.getOrElse(it) { 1L } } else null)
+        BuildingRepository.FixedBasis.PER_PERSON -> BuildingRepository.ChargePlan.Fixed(perPerson = rate.value ?: 0)
+        BuildingRepository.FixedBasis.PER_M2 -> BuildingRepository.ChargePlan.Fixed(perM2 = rate.value ?: 0)
+        BuildingRepository.FixedBasis.COMBINED -> BuildingRepository.ChargePlan.Fixed(perUnit = rateBase.value ?: 0, perPerson = ratePeople.value ?: 0, perM2 = rateM2.value ?: 0)
+    }
+    /** What unit [i] would pay each month under the plan (the same rounding-free sum the engine starts from). */
+    fun exampleFor(i: Int): Long {
+        val p = plan(); val r = rows[i].toDraft()
+        return p.perUnit * (p.unitWeights?.getOrNull(i) ?: 1L) + p.perPerson * r.occupants + p.perM2 * r.areaCentiM2 / 100
+    }
+    val planValid = fixed == false || (fixed == true && plan().let { p ->
+        p.perUnit + p.perPerson + p.perM2 > 0 && (p.perM2 == 0L || areasKnown) && (p.unitWeights?.any { it > 0 } ?: true)
+    })
     val titles = listOf(S.setupStep1, S.setupStep2, S.setupStepCharge, S.setupStep3)
 
     Column(Modifier.fillMaxWidth()) {
@@ -161,14 +180,30 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
                                     BuildingRepository.FixedBasis.PER_UNIT -> S.fixedPerUnit
                                     BuildingRepository.FixedBasis.PER_PERSON -> S.fixedPerPerson
                                     BuildingRepository.FixedBasis.PER_M2 -> S.fixedPerM2
+                                    BuildingRepository.FixedBasis.COMBINED -> S.fixedCombined
                                 }
                             }
-                            NumberInput(when (basis) {
-                                BuildingRepository.FixedBasis.PER_UNIT -> S.ratePerUnit
+                            if (basis == BuildingRepository.FixedBasis.COMBINED) {
+                                Hint(S.combinedHint)
+                                NumberInput(S.ratePerM2Short, rateM2)
+                                NumberInput(S.ratePerPersonShort, ratePeople)
+                                NumberInput(S.ratePerUnitBase, rateBase)
+                            } else NumberInput(when (basis) {
                                 BuildingRepository.FixedBasis.PER_PERSON -> S.ratePerPerson
                                 BuildingRepository.FixedBasis.PER_M2 -> S.ratePerM2
+                                else -> S.ratePerUnit
                             }, rate)
-                            if (basis == BuildingRepository.FixedBasis.PER_M2 && !areasKnown) Hint(S.needAreas, MaterialTheme.colorScheme.error)
+                            if (basis == BuildingRepository.FixedBasis.PER_UNIT) {
+                                com.github.opscalehub.dong.ui.SwitchRow(S.unitsDiffer, differ, { differ = it }, supporting = S.unitsDifferHint)
+                                if (differ) com.github.opscalehub.dong.ui.MultiplierEditor(
+                                    rows.map { com.github.opscalehub.dong.ui.MultiplierRow("${S.unit} ${it.label}", Fmt.parseLong(it.floor)?.toInt() ?: 1) },
+                                    rows.indices.map { weights.getOrElse(it) { 1L } },
+                                ) { w -> weights.clear(); weights.addAll(w) }
+                            }
+                            val p = plan()
+                            if (p.perM2 > 0 && !areasKnown) Hint(S.needAreas, MaterialTheme.colorScheme.error)
+                            else if (rows.isNotEmpty() && p.perUnit + p.perPerson + p.perM2 > 0) Text(S.exampleShare.format(rows[0].label, mf.withUnit(exampleFor(0))),
+                                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
                             Hint(S.chargeFixedNote)
                         }
                     }
@@ -192,7 +227,7 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
                 2 -> Button(onClick = { step = 3 }, enabled = planValid) { Text(S.next) }
                 else -> Button(onClick = {
                     vm.run(S.saved, onSuccess = onDone) {
-                        val plan = if (fixed == true) BuildingRepository.ChargePlan.Fixed(basis, rate.value!!) else BuildingRepository.ChargePlan.SplitBills
+                        val plan = if (fixed == true) plan() else BuildingRepository.ChargePlan.SplitBills
                         val id = vm.repos.buildings.setup(name, address, true, 1000, rows.map { it.toDraft() }, cash.value ?: 0, 0, plan)
                         vm.select(id)
                     }

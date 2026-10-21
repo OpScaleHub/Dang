@@ -425,6 +425,8 @@ object AllocationEngine {
             Basis.Occupants -> if (ctx.occupancyKind == QuantityKind.OCCUPANT_DAYS) ctx.periodDays.toLong() else 1L
             Basis.Area -> 100L
             is Basis.Parking -> 1L
+            // A per-unit rate times each unit's multiplier (e.g. small 1×, large 2×).
+            is Basis.Weighted -> 1L
             else -> {
                 issues += Issue(IssueCode.RATE_BASIS_UNSUPPORTED, sourceId)
                 return AllocationResult(sourceId, 0, emptyMap(), 0, emptyList(), issues)

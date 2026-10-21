@@ -98,6 +98,9 @@ class JournalWriter(private val r: Repos) {
 
 /** Name of the monthly charge created by the setup wizard (fixed-charge buildings). */
 const val MONTHLY_CHARGE = "شارژ ماهانه"
+private const val S_BASE = "پایه"
+private const val S_PEOPLE = "نفرات"
+private const val S_AREA = "متراژ"
 
 class BuildingRepository(private val r: Repos) {
     private val dao get() = r.db.buildingDao()
@@ -131,13 +134,24 @@ class BuildingRepository(private val r: Repos) {
 
     /** How the building charges residents; asked in plain words by the setup wizard. */
     sealed interface ChargePlan {
-        /** The same kind of amount every month; bills are paid from the fund, not charged again. */
-        data class Fixed(val basis: FixedBasis, val rateMinor: Long) : ChargePlan
+        /**
+         * The same amounts every month, added together: [perUnit] (times the unit's multiplier from
+         * [unitWeights], one per unit in order, when given) + [perPerson] × residents + [perM2] × area.
+         * Bills are paid from the fund, not charged again.
+         */
+        data class Fixed(val perUnit: Long = 0, val perPerson: Long = 0, val perM2: Long = 0, val unitWeights: List<Long>? = null) : ChargePlan {
+            constructor(basis: FixedBasis, rateMinor: Long) : this(
+                perUnit = if (basis == FixedBasis.PER_UNIT) rateMinor else 0,
+                perPerson = if (basis == FixedBasis.PER_PERSON) rateMinor else 0,
+                perM2 = if (basis == FixedBasis.PER_M2) rateMinor else 0,
+            )
+        }
         /** Each month's actual bills are split among the units. */
         data object SplitBills : ChargePlan
     }
 
-    enum class FixedBasis { PER_UNIT, PER_PERSON, PER_M2 }
+    /** The wizard's choice; COMBINED fills several rates of [ChargePlan.Fixed] at once. */
+    enum class FixedBasis { PER_UNIT, PER_PERSON, PER_M2, COMBINED }
 
     /**
      * Setup wizard in one transaction: building, units with occupancy, optional opening
@@ -149,8 +163,12 @@ class BuildingRepository(private val r: Repos) {
     ): String = r.tx {
         if (units.isEmpty() || units.any { it.label.isBlank() || it.areaCentiM2 < 0 || it.occupants < 0 }) fail(OpError.INVALID_INPUT, "units")
         if (units.map { it.label.trim() }.toSet().size != units.size) fail(OpError.INVALID_INPUT, "duplicate label")
-        if (plan is ChargePlan.Fixed && plan.rateMinor <= 0) fail(OpError.INVALID_AMOUNT, "monthly charge")
-        if (plan is ChargePlan.Fixed && plan.basis == FixedBasis.PER_M2 && units.any { it.areaCentiM2 <= 0 }) fail(OpError.INVALID_INPUT, "area")
+        if (plan is ChargePlan.Fixed) {
+            val rates = listOf(plan.perUnit, plan.perPerson, plan.perM2)
+            if (rates.any { it < 0 } || rates.sum() <= 0) fail(OpError.INVALID_AMOUNT, "monthly charge")
+            if (plan.perM2 > 0 && units.any { it.areaCentiM2 <= 0 }) fail(OpError.INVALID_INPUT, "area")
+            plan.unitWeights?.let { w -> if (w.size != units.size || w.any { it < 0 } || w.all { it == 0L }) fail(OpError.INVALID_INPUT, "multipliers") }
+        }
         val b = create(name, address, roundingIncrement, displayCurrencyName = if (displayToman) "تومان" else "", displayDivisor = if (displayToman) 10 else 1, plan = plan)
         val month = SampleData.month(r.clock.today())
         units.forEachIndexed { i, u ->
@@ -166,9 +184,16 @@ class BuildingRepository(private val r: Repos) {
         }
         if (plan is ChargePlan.Fixed) {
             val cat = r.db.expenseDao().categories(b).first { !it.active }
-            val basis = when (plan.basis) { FixedBasis.PER_UNIT -> Basis.Equal; FixedBasis.PER_PERSON -> Basis.Occupants; FixedBasis.PER_M2 -> Basis.Area }
-            r.expenses.saveChargeItem(ChargeItemEntity(newId(), b, MONTHLY_CHARGE, cat.id, cat.defaultFundId!!, ChargeMode.RATE, plan.rateMinor,
-                AllocationPolicy.single(basis).encode(), activeFrom = month.start))
+            val ids = r.db.buildingDao().units(b).sortedBy { it.sortOrder }.map { it.id }
+            val perUnitBasis = plan.unitWeights?.let { w -> Basis.Weighted(ids.zip(w).toMap()) } ?: Basis.Equal
+            // One charge per non-zero rate, all of type «شارژ ماهانه» so a bill shows them as one line.
+            val parts = listOf(Triple(S_BASE, plan.perUnit, perUnitBasis), Triple(S_PEOPLE, plan.perPerson, Basis.Occupants), Triple(S_AREA, plan.perM2, Basis.Area))
+                .filter { it.second > 0 }
+            parts.forEach { (part, rate, basis) ->
+                val label = if (parts.size == 1) MONTHLY_CHARGE else "$MONTHLY_CHARGE — $part"
+                r.expenses.saveChargeItem(ChargeItemEntity(newId(), b, label, cat.id, cat.defaultFundId!!, ChargeMode.RATE, rate,
+                    AllocationPolicy.single(basis).encode(), activeFrom = month.start))
+            }
         }
         r.periods.create(b, month.name, month.start, month.end, month.end + 10)
         b

@@ -156,6 +156,7 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
     var docRef by rememberSaveable { mutableStateOf(existing?.documentRef ?: "") }
     var notes by rememberSaveable { mutableStateOf(existing?.notes ?: "") }
     var payNow by rememberSaveable { mutableStateOf(false) }
+    var saveAsDefault by rememberSaveable { mutableStateOf(false) }
     val policy = rememberPolicyEditor(existing?.policy() ?: AllocationPolicy())
     var policyTouched by remember { mutableStateOf(existing != null) }
     var advanced by remember { mutableStateOf(false) }
@@ -240,9 +241,27 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
                     add(Triple(S.splitFund, if (chargeItems.any { it.active }) S.splitFundHintFixed else S.splitFundHint, AllocationPolicy.FUND_ONLY))
                     if (advancedMode) last?.let { add(Triple(S.presetLast, policySummary(it.policy()), it.policy())) }
                 }
-                val custom = pol != null && options.none { it.third == pol }
+                // Multipliers: a weighted split edited as «۱×، ۲×…» per unit (e.g. elevator by floor).
+                val active = units.filter { it.active }.sortedBy { it.sortOrder }
+                val currentWeights = (pol?.components?.singleOrNull()?.basis as? Basis.Weighted)?.weights
+                val weighted = currentWeights != null && pol.components.size == 1
+                val custom = pol != null && !weighted && options.none { it.third == pol }
                 options.forEach { (label, hint, p) -> SplitOption(label, hint, pol == p) { policy.reset(p); policyTouched = true } }
+                SplitOption(S.splitWeighted, S.splitWeightedHint, weighted) {
+                    if (!weighted) { policy.reset(AllocationPolicy.single(Basis.Weighted(active.associate { it.id to 1L }))); policyTouched = true }
+                }
+                if (weighted) {
+                    com.github.opscalehub.dong.ui.MultiplierEditor(
+                        active.map { com.github.opscalehub.dong.ui.MultiplierRow("${S.unit} ${it.label} (${S.floor} ${Fmt.number(it.floor.toLong())})", it.floor) },
+                        active.map { currentWeights!![it.id] ?: 1L },
+                    ) { w -> policy.reset(AllocationPolicy.single(Basis.Weighted(active.map { it.id }.zip(w).toMap()))); policyTouched = true }
+                }
                 if (custom) SplitOption(S.splitCustom, pol?.let { policySummary(it) } ?: "", true) {}
+                // Remember this choice for the expense type, so next month needs no decision.
+                val cat = category
+                if (cat != null && pol != null && pol != cat.policy()) {
+                    com.github.opscalehub.dong.ui.SwitchRow(S.saveAsDefault.format(cat.name), saveAsDefault, { saveAsDefault = it })
+                }
                 if (advancedMode) {
                     TextButton(onClick = { advanced = !advanced }) { Text(S.advanced) }
                     if (advanced) PolicyEditor(policy, units, spaces)
@@ -279,6 +298,7 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
                     )
                     vm.run(S.saved, onSuccess = { nav.popBackStack() }) {
                         val named = if (e.description.isBlank()) e.copy(description = category!!.name) else e
+                        if (saveAsDefault && pol != category!!.policy()) vm.repos.expenses.saveCategory(category!!.copy(defaultPolicyJson = pol!!.encode()))
                         if (existing == null) vm.repos.expenses.create(named, if (payNow) cash.firstOrNull()?.id else null) else vm.repos.expenses.update(named)
                     }
                 }, enabled = valid, modifier = Modifier.fillMaxWidth()) { Text(S.save) }

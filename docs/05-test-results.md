@@ -160,3 +160,11 @@ nothing else on the phone was touched.
 | Instrumented E2E with the four-step wizard and the chip-based expense form | 1/1 pass |
 | Emulator by hand: fixed-charge wizard (8 units × 500,000 Toman) → Home marks bills optional → close month → «بدهی ساکنان» 4,000,000 | OK |
 | Emulator by hand: simple menu hides unused items; display settings (mode, text size); «نظر» captures the current screen; survey sends answers and score | OK |
+
+## 0.4.1 — combined monthly charge and multipliers
+
+| Check | Result |
+|---|---|
+| Unit + Robolectric incl. combined charge (m² + person rates add up; one bill line «شارژ ماهانه»), per-unit multipliers and their validation, engine rate × multiplier | 137 tests, 0 failures |
+| Instrumented E2E | 1/1 pass |
+| Emulator by hand: wizard «ترکیبی» with live example, «همه واحدها یک اندازه نیستند» with «بر اساس طبقه»; elevator bill «با ضریب برای هر واحد» by floor → preview 166,700 / 166,700 / 333,300 / 333,300 for 1,000,000 Toman | OK |

@@ -218,6 +218,15 @@ class AllocationEngineTest {
     }
 
     @Test
+    fun `rate times a per unit multiplier`() {
+        val r = AllocationEngine.rate("w", 500_000, AllocationPolicy.single(Basis.Weighted(mapOf("1-1" to 1L, "1-2" to 2L, "1-3" to 0L))), ctx)
+        assertEquals(500_000L, r.shares["1-1"])
+        assertEquals(1_000_000L, r.shares["1-2"])
+        assertEquals(0L, r.shares["1-3"]) // exempt
+        assertEquals(0L, r.shares["2-1"] ?: 0L) // not listed counts as 0
+    }
+
+    @Test
     fun `policy json round trip`() {
         val p = AllocationPolicy(components = listOf(
             AllocationComponent(Portion.Fixed(1), Basis.Consumption(CommonWater.Separate(SimpleBasis.AREA)), Eligibility.Selected(setOf("1-1"))),

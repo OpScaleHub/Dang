@@ -372,4 +372,30 @@ class RepositoryTest {
         val units = w.closeMonthWithBill(b, 5_000_000) // cleaning by number of people: 2 and 3
         assertEquals(listOf(2_000_000L, 3_000_000L), w.db.buildingDao().units(b).map { units.getValue(it.id) })
     }
+
+    @Test
+    fun `combined monthly charge adds area and people rates and shows as one bill line`() = runBlocking {
+        val w = world()
+        // 60 m² with 2 people, 80 m² with 3 people; 20,000 per m² + 1,000,000 per person (Rial).
+        val b = w.r.buildings.setup("ترکیبی", "", true, 1000, drafts, 0, 0, BuildingRepository.ChargePlan.Fixed(perPerson = 1_000_000, perM2 = 20_000))
+        assertEquals(2, w.db.expenseDao().chargeItems(b).size)
+        val units = w.closeMonthWithBill(b, 1_000_000)
+        val ids = w.db.buildingDao().units(b).sortedBy { it.sortOrder }.map { it.id }
+        assertEquals(listOf(3_200_000L, 4_600_000L), ids.map { units.getValue(it) })
+        val p = w.db.periodDao().periods(b).single()
+        val bill = w.r.bills.bill(b, ids[0], p.id)
+        assertEquals(listOf(MONTHLY_CHARGE to 3_200_000L), bill.lines)
+    }
+
+    @Test
+    fun `per unit charge with multipliers and their validation`() = runBlocking {
+        val w = world()
+        val bad = BuildingRepository.ChargePlan.Fixed(perUnit = 1_000_000, unitWeights = listOf(0, 0))
+        expectError(OpError.INVALID_INPUT) { w.r.buildings.setup("x", "", true, 1000, drafts, 0, 0, bad) }
+        expectError(OpError.INVALID_INPUT) { w.r.buildings.setup("x", "", true, 1000, drafts, 0, 0, bad.copy(unitWeights = listOf(1))) }
+        val b = w.r.buildings.setup("ضریب", "", true, 1000, drafts, 0, 0, bad.copy(unitWeights = listOf(1, 3)))
+        val units = w.closeMonthWithBill(b, 1_000_000)
+        val ids = w.db.buildingDao().units(b).sortedBy { it.sortOrder }.map { it.id }
+        assertEquals(listOf(1_000_000L, 3_000_000L), ids.map { units.getValue(it) })
+    }
 }
