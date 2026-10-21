@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -65,6 +66,7 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
     val expenses by vm.expenses.collectAsState()
     val funds by vm.funds.collectAsState()
     val shares by vm.billShares.collectAsState()
+    val chargeItems by vm.chargeItems.collectAsState()
     val current = vm.currentPeriod(periods, vm.today)
     val preview by derived(vm, current?.id, current?.status) { current?.let { vm.repos.periods.preview(it.id) } }
     val report by derived(vm, building.id) { vm.reports.load(building.id) }
@@ -72,7 +74,18 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
 
     WithFab(S.payNow, { paying = true }) {
         ScreenList {
-            item { com.github.opscalehub.dong.ui.UpdateCard(vm.updater) }
+            item {
+                val offer by vm.ui.surveyOffer.collectAsState()
+                if (offer && System.currentTimeMillis() - vm.ui.firstUse > com.github.opscalehub.dong.ui.UiPrefs.SURVEY_AFTER_MS) {
+                    SectionCard {
+                        Text(S.surveyOffer, style = MaterialTheme.typography.bodyLarge)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { nav.navigate(com.github.opscalehub.dong.ui.Routes.SURVEY) }) { Text(S.surveyYes) }
+                            TextButton(onClick = { vm.ui.closeSurveyOffer() }) { Text(S.surveyNo) }
+                        }
+                    }
+                }
+            }
             // ---- month header ------------------------------------------------
             item {
                 if (current == null) {
@@ -92,8 +105,13 @@ fun HomeScreen(vm: AppViewModel, nav: NavController) {
                 val steps = buildList {
                     if (relevant.isNotEmpty()) add(StepState(S.stepReadings, "${Fmt.number(readDone.toLong())} ${S.of} ${Fmt.number(relevant.size.toLong())} ${S.meters}",
                         readDone == relevant.size, !finalized) { nav.navigate(Routes.READINGS) })
-                    add(StepState(S.stepExpenses, if (monthExpenses.isEmpty()) S.empty else "${Fmt.number(monthExpenses.size.toLong())} ${S.items}، ${money(monthExpenses.sumOf { it.amountMinor })}",
-                        monthExpenses.isNotEmpty() || finalized, true) { nav.navigate(Routes.EXPENSES) })
+                    // With a fixed monthly charge, bills are optional: they are paid from the fund.
+                    val fixedCharge = chargeItems.any { it.active }
+                    add(StepState(S.stepExpenses, when {
+                        monthExpenses.isNotEmpty() -> "${Fmt.number(monthExpenses.size.toLong())} ${S.items}، ${money(monthExpenses.sumOf { it.amountMinor })}"
+                        fixedCharge -> S.expensesOptionalFixed
+                        else -> S.empty
+                    }, monthExpenses.isNotEmpty() || finalized || fixedCharge, true) { nav.navigate(Routes.EXPENSES) })
                     add(StepState(S.stepReview, when {
                         finalized -> S.monthDone
                         blocking > 0 -> "${Fmt.number(blocking.toLong())} ${S.blockingIssues}"

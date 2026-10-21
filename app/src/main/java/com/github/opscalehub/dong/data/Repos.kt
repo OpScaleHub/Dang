@@ -23,6 +23,8 @@ import com.github.opscalehub.dong.data.db.PeriodStatus
 import com.github.opscalehub.dong.data.db.UnitEntity
 import com.github.opscalehub.dong.data.db.WaterTariffEntity
 import com.github.opscalehub.dong.domain.allocation.AllocationPolicy
+import com.github.opscalehub.dong.data.db.ChargeItemEntity
+import com.github.opscalehub.dong.domain.model.ChargeMode
 import com.github.opscalehub.dong.domain.allocation.Basis
 import com.github.opscalehub.dong.domain.allocation.CommonWater
 import com.github.opscalehub.dong.domain.allocation.SimpleBasis
@@ -94,6 +96,9 @@ class JournalWriter(private val r: Repos) {
     }
 }
 
+/** Name of the monthly charge created by the setup wizard (fixed-charge buildings). */
+const val MONTHLY_CHARGE = "شارژ ماهانه"
+
 class BuildingRepository(private val r: Repos) {
     private val dao get() = r.db.buildingDao()
 
@@ -101,7 +106,7 @@ class BuildingRepository(private val r: Repos) {
     /** New buildings store Rial exactly and display Toman (÷10) unless told otherwise. */
     suspend fun create(
         name: String, address: String = "", roundingIncrement: Long = 1, currencyName: String = "ریال",
-        displayCurrencyName: String = "تومان", displayDivisor: Long = 10,
+        displayCurrencyName: String = "تومان", displayDivisor: Long = 10, plan: ChargePlan? = null,
     ): String = r.tx {
         if (name.isBlank()) fail(OpError.INVALID_INPUT, "name")
         if (roundingIncrement < 1) fail(OpError.INVALID_INPUT, "rounding")
@@ -115,8 +120,8 @@ class BuildingRepository(private val r: Repos) {
         fin.upsertFund(op)
         fin.upsertFund(res)
         fin.upsertCashAccount(CashAccountEntity(newId(), id, "صندوق نقدی", CashKind.CASH_BOX))
-        defaultCategories(op.id, res.id).forEachIndexed { i, (n, p, fund, water) ->
-            r.db.expenseDao().upsertCategory(CategoryEntity(newId(), id, n, p.encode(), fund, water, true, i))
+        (if (plan == null) defaultCategories(op.id, res.id) else simpleCategories(op.id, plan)).forEachIndexed { i, c ->
+            r.db.expenseDao().upsertCategory(CategoryEntity(newId(), id, c.name, c.policy.encode(), c.fund, c.water, c.active, i))
         }
         r.journal.audit(id, "CREATE_BUILDING", "building", id, name)
         id
@@ -124,17 +129,29 @@ class BuildingRepository(private val r: Repos) {
 
     data class UnitDraft(val label: String, val floor: Int, val areaCentiM2: Long, val occupants: Int)
 
+    /** How the building charges residents; asked in plain words by the setup wizard. */
+    sealed interface ChargePlan {
+        /** The same kind of amount every month; bills are paid from the fund, not charged again. */
+        data class Fixed(val basis: FixedBasis, val rateMinor: Long) : ChargePlan
+        /** Each month's actual bills are split among the units. */
+        data object SplitBills : ChargePlan
+    }
+
+    enum class FixedBasis { PER_UNIT, PER_PERSON, PER_M2 }
+
     /**
      * Setup wizard in one transaction: building, units with occupancy, optional opening
      * cash/reserve, and the current month as the first (draft) period.
      */
     suspend fun setup(
         name: String, address: String, displayToman: Boolean, roundingIncrement: Long,
-        units: List<UnitDraft>, openingCash: Long, openingReserve: Long,
+        units: List<UnitDraft>, openingCash: Long, openingReserve: Long, plan: ChargePlan = ChargePlan.SplitBills,
     ): String = r.tx {
         if (units.isEmpty() || units.any { it.label.isBlank() || it.areaCentiM2 < 0 || it.occupants < 0 }) fail(OpError.INVALID_INPUT, "units")
         if (units.map { it.label.trim() }.toSet().size != units.size) fail(OpError.INVALID_INPUT, "duplicate label")
-        val b = create(name, address, roundingIncrement, displayCurrencyName = if (displayToman) "تومان" else "", displayDivisor = if (displayToman) 10 else 1)
+        if (plan is ChargePlan.Fixed && plan.rateMinor <= 0) fail(OpError.INVALID_AMOUNT, "monthly charge")
+        if (plan is ChargePlan.Fixed && plan.basis == FixedBasis.PER_M2 && units.any { it.areaCentiM2 <= 0 }) fail(OpError.INVALID_INPUT, "area")
+        val b = create(name, address, roundingIncrement, displayCurrencyName = if (displayToman) "تومان" else "", displayDivisor = if (displayToman) 10 else 1, plan = plan)
         val month = SampleData.month(r.clock.today())
         units.forEachIndexed { i, u ->
             val e = UnitEntity(newId(), b, u.floor, u.label.trim(), u.areaCentiM2, sortOrder = i + 1)
@@ -147,11 +164,36 @@ class BuildingRepository(private val r: Repos) {
             val reserve = fin.funds(b).first { it.kind == FundKind.RESERVE }.id
             r.finance.postOpening(b, month.start - 1, mapOf(cash to openingCash), emptyMap(), emptyMap(), mapOf(reserve to openingReserve))
         }
+        if (plan is ChargePlan.Fixed) {
+            val cat = r.db.expenseDao().categories(b).first { !it.active }
+            val basis = when (plan.basis) { FixedBasis.PER_UNIT -> Basis.Equal; FixedBasis.PER_PERSON -> Basis.Occupants; FixedBasis.PER_M2 -> Basis.Area }
+            r.expenses.saveChargeItem(ChargeItemEntity(newId(), b, MONTHLY_CHARGE, cat.id, cat.defaultFundId!!, ChargeMode.RATE, plan.rateMinor,
+                AllocationPolicy.single(basis).encode(), activeFrom = month.start))
+        }
         r.periods.create(b, month.name, month.start, month.end, month.end + 10)
         b
     }
 
-    private data class Cat(val name: String, val policy: AllocationPolicy, val fund: String, val water: Boolean = false)
+    private data class Cat(val name: String, val policy: AllocationPolicy, val fund: String, val water: Boolean = false, val active: Boolean = true)
+
+    /**
+     * The short list a new building starts with (the demo keeps the full one below). With a fixed
+     * monthly charge every bill is paid from the fund by default, so nothing is charged twice; the
+     * inactive «شارژ ماهانه» type only carries the monthly charge and is hidden from the expense form.
+     */
+    private fun simpleCategories(op: String, plan: ChargePlan): List<Cat> {
+        val fixed = plan is ChargePlan.Fixed
+        fun p(b: Basis) = if (fixed) AllocationPolicy.FUND_ONLY else AllocationPolicy.single(b)
+        return listOfNotNull(
+            Cat("آب", p(Basis.Occupants), op, water = true),
+            Cat("برق و گاز مشاعات", p(Basis.Equal), op),
+            Cat("نظافت", p(Basis.Occupants), op),
+            Cat("آسانسور", p(Basis.Equal), op),
+            Cat("تعمیرات", p(Basis.Equal), op),
+            Cat("سایر", p(Basis.Equal), op),
+            if (fixed) Cat(MONTHLY_CHARGE, AllocationPolicy.FUND_ONLY, op, active = false) else null,
+        )
+    }
 
     /** Examples only — every policy is editable per building and per expense. */
     private fun defaultCategories(op: String, res: String) = listOf(

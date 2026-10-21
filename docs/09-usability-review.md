@@ -23,8 +23,7 @@ collect screens, reports, and every screen at 130% font size (text wraps, nothin
 
 ## Suggestions not done (for a later round)
 
-- **«همه تراکنش‌ها»** starts with five action buttons; the rare ones (transfers between funds,
-  cash ↔ bank, refunds) could fold under «کارهای دیگر».
+- ~~**«همه تراکنش‌ها»** starts with five action buttons~~ — done in 0.4: one main action, the rest under «کارهای دیگر».
 - **Meters screen** shows reconciliation numbers and every meter's last reading at once; a
   simpler default with details on tap would suit occasional users.
 - **Short "what is this page?" help** on Expenses, Months and Meters for first-time users.

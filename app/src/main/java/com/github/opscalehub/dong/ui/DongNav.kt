@@ -1,5 +1,11 @@
 package com.github.opscalehub.dong.ui
 
+import androidx.compose.ui.unit.dp
+
+import androidx.core.view.drawToBitmap
+
+import androidx.compose.ui.platform.LocalView
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -64,6 +70,8 @@ import com.github.opscalehub.dong.ui.screens.SettingsScreen
 import com.github.opscalehub.dong.ui.screens.SetupWizard
 import com.github.opscalehub.dong.ui.screens.UnitScreen
 import com.github.opscalehub.dong.ui.screens.SendBillsScreen
+import com.github.opscalehub.dong.ui.screens.FeedbackScreen
+import com.github.opscalehub.dong.ui.screens.SurveyScreen
 import com.github.opscalehub.dong.ui.screens.UnitsScreen
 import com.github.opscalehub.dong.ui.screens.WaterScreen
 import com.github.opscalehub.dong.ui.screens.WelcomeScreen
@@ -86,6 +94,8 @@ object Routes {
     const val SETTINGS = "settings"
     const val AUDIT = "audit"
     const val COLLECT = "collect"
+    const val FEEDBACK = "feedback"
+    const val SURVEY = "survey"
     fun send(periodId: String) = "send/$periodId"
     fun unit(id: String) = "unit/$id"
     fun meter(id: String) = "meter/$id"
@@ -127,6 +137,7 @@ fun DongRoot(vm: AppViewModel = viewModel()) {
         val route = entry?.destination?.route ?: Routes.HOME
         val isTab = tabs.any { it.route == route }
         var switcher by remember { mutableStateOf(false) }
+        val view = LocalView.current
         Scaffold(
             topBar = {
                 Column {
@@ -148,6 +159,14 @@ fun DongRoot(vm: AppViewModel = viewModel()) {
                         navigationIcon = {
                             if (!isTab) IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, S.back) }
                         },
+                        actions = {
+                            // «نظر» on every screen: a picture of this screen goes with the feedback.
+                            if (route != Routes.FEEDBACK && route != Routes.SURVEY) TextButton(onClick = {
+                                vm.feedbackShot = runCatching { view.rootView.drawToBitmap() }.getOrNull()
+                                vm.feedbackFrom = titleFor(route)
+                                nav.navigate(Routes.FEEDBACK)
+                            }) { Text(S.feedback) }
+                        },
                     )
                     if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
@@ -168,7 +187,10 @@ fun DongRoot(vm: AppViewModel = viewModel()) {
             },
             snackbarHost = { SnackbarHost(snackbar) },
         ) { pad ->
-            Column(Modifier.padding(pad).fillMaxSize()) { DongNavHost(nav, vm) }
+            Column(Modifier.padding(pad).fillMaxSize()) {
+                if (isTab) Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) { UpdateCard(vm.updater) }
+                DongNavHost(nav, vm)
+            }
         }
     }
 }
@@ -188,6 +210,8 @@ private fun titleFor(route: String): String = when {
     route == Routes.SETTINGS -> S.settings
     route == Routes.AUDIT -> S.auditLog
     route == Routes.COLLECT -> S.collectTitle
+    route == Routes.FEEDBACK -> S.feedbackLong
+    route == Routes.SURVEY -> S.survey
     route.startsWith("send/") -> S.stepSend
     route == Routes.BUILDINGS -> S.buildings
     route == Routes.SETUP -> S.setupTitle
@@ -207,7 +231,9 @@ private fun DongNavHost(nav: NavHostController, vm: AppViewModel) {
         composable("send/{id}") { SendBillsScreen(vm, it.arguments?.getString("id")!!) }
         composable(Routes.EXPENSES) { ExpensesScreen(vm, nav) }
         composable(Routes.REPORTS) { ReportsScreen(vm, nav) }
-        composable(Routes.MORE) { MoreScreen(nav) }
+        composable(Routes.MORE) { MoreScreen(vm, nav) }
+        composable(Routes.FEEDBACK) { FeedbackScreen(vm, nav) }
+        composable(Routes.SURVEY) { SurveyScreen(vm, nav) }
         composable(Routes.BUILDINGS) { BuildingsScreen(vm, nav) }
         composable(Routes.SETUP) { SetupWizard(vm, onDone = { nav.navigate(Routes.HOME) { popUpTo(Routes.HOME) { inclusive = true } } }) }
         composable(Routes.READINGS) { ReadingsScreen(vm, nav) }

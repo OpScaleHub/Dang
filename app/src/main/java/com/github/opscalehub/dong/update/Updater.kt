@@ -39,7 +39,8 @@ data class ReleaseInfo(
 
 /** Pure decisions, kept apart from Android for tests. */
 object UpdatePolicy {
-    const val CHECK_INTERVAL_MS = 24L * 60 * 60 * 1000
+    /** At most once an hour, on app start: testers expect a new version as soon as they reopen the app. */
+    const val CHECK_INTERVAL_MS = 60L * 60 * 1000
     private val json = Json { ignoreUnknownKeys = true }
 
     fun parse(text: String): ReleaseInfo = json.decodeFromString(ReleaseInfo.serializer(), text)

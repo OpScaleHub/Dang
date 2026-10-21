@@ -19,6 +19,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.github.opscalehub.dong.data.db.CategoryEntity
@@ -179,7 +182,15 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
     }
 
     val pol = policy.toPolicy()
-    val valid = date.value != null && description.isNotBlank() && category != null && (amount.value ?: 0) != 0L && fund != null && pol != null
+    // The description is optional: a blank one is saved as the expense type's name.
+    val valid = date.value != null && category != null && (amount.value ?: 0) != 0L && fund != null && pol != null
+    val advancedMode by vm.ui.advanced.collectAsState()
+    val meters by vm.meters.collectAsState()
+    val chargeItems by vm.chargeItems.collectAsState()
+    // A fixed-monthly-charge building pays bills from the fund: start there until a type is picked.
+    LaunchedEffect(chargeItems) {
+        if (existing == null && category == null && chargeItems.any { it.active }) policy.reset(AllocationPolicy.FUND_ONLY)
+    }
 
     if (locked && existing != null) {
         LockedExpense(vm, existing, period, categories, suppliers, funds, units, paid ?: 0, payments.orEmpty(), onPay = { paying = true })
@@ -190,14 +201,21 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
     ScreenList {
         item {
             SectionCard(if (existing == null) S.newExpense else S.editExpense, subtitle = S.expenseVsPayment) {
-                Dropdown(S.category, categories.filter { it.active || it.id == existing?.categoryId }, category, { category = it }, { it.name })
+                // Big tappable expense types instead of a dropdown (recognition, not recall).
+                Text(S.whatExpense, style = MaterialTheme.typography.labelLarge)
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    categories.filter { it.active || it.id == existing?.categoryId }.forEach { c ->
+                        androidx.compose.material3.FilterChip(selected = category?.id == c.id, onClick = { category = c },
+                            label = { Text(c.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(vertical = 8.dp)) })
+                    }
+                }
                 NumberInput(S.amount, amount)
-                TextInput(S.description, description, { description = it }, supporting = S.descriptionHint)
-                DateInput(S.date, date, vm.today)
-                Dropdown(S.period, listOf<PeriodEntity?>(null) + drafts, periodSel, { periodSel = it }, { it?.name ?: S.noPeriodAssigned })
+                TextInput(S.descriptionOptional, description, { description = it }, supporting = S.descriptionHint)
                 if (existing == null) SwitchRow(S.paidNow, payNow, { payNow = it })
                 TextButton(onClick = { details = !details }) { Text(if (details) S.fewerDetails else S.moreDetails) }
                 if (details) {
+                    DateInput(S.date, date, vm.today)
+                    Dropdown(S.period, listOf<PeriodEntity?>(null) + drafts, periodSel, { periodSel = it }, { it?.name ?: S.noPeriodAssigned })
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Dropdown(S.supplier, listOf<SupplierEntity?>(null) + suppliers, supplier, { supplier = it }, { it?.name ?: S.none }, Modifier.weight(1f))
                         TextButton(onClick = { addingSupplier = true }) { Text(S.add) }
@@ -209,26 +227,26 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
             }
         }
         item {
-            SectionCard(S.presets) {
-                // Presets set the whole policy in one tap; the full editor stays under «پیشرفته».
+            SectionCard(S.howToSplit) {
+                // Simple mode: a few named choices with what each one means. Advanced mode adds the
+                // last-used policy and the full formula editor.
                 val last = expenses.filter { it.categoryId == category?.id && it.id != existing?.id && it.status == ExpenseStatus.ACTIVE }.maxByOrNull { it.createdAt }
-                val presets = buildList {
-                    category?.let { add(S.presetCategory to it.policy()) }
-                    add(S.presetEqual to AllocationPolicy.single(Basis.Equal))
-                    add(S.presetOccupants to AllocationPolicy.single(Basis.Occupants))
-                    add(S.presetArea to AllocationPolicy.single(Basis.Area))
-                    add(S.presetWater to AllocationPolicy.single(Basis.Consumption(CommonWater.Separate(com.github.opscalehub.dong.domain.allocation.SimpleBasis.EQUAL))))
-                    last?.let { add(S.presetLast to it.policy()) }
-                    add(S.presetFund to AllocationPolicy.FUND_ONLY)
+                val options = buildList {
+                    add(Triple(S.splitEqual, S.splitEqualHint, AllocationPolicy.single(Basis.Equal)))
+                    add(Triple(S.splitPeople, S.splitPeopleHint, AllocationPolicy.single(Basis.Occupants)))
+                    add(Triple(S.splitArea, S.splitAreaHint, AllocationPolicy.single(Basis.Area)))
+                    if (meters.isNotEmpty() || advancedMode) add(Triple(S.splitWater, S.splitWaterHint,
+                        AllocationPolicy.single(Basis.Consumption(CommonWater.Separate(com.github.opscalehub.dong.domain.allocation.SimpleBasis.EQUAL)))))
+                    add(Triple(S.splitFund, if (chargeItems.any { it.active }) S.splitFundHintFixed else S.splitFundHint, AllocationPolicy.FUND_ONLY))
+                    if (advancedMode) last?.let { add(Triple(S.presetLast, policySummary(it.policy()), it.policy())) }
                 }
-                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    presets.forEach { (label, p) ->
-                        androidx.compose.material3.FilterChip(selected = pol == p, onClick = { policy.reset(p); policyTouched = true }, label = { Text(label) })
-                    }
+                val custom = pol != null && options.none { it.third == pol }
+                options.forEach { (label, hint, p) -> SplitOption(label, hint, pol == p) { policy.reset(p); policyTouched = true } }
+                if (custom) SplitOption(S.splitCustom, pol?.let { policySummary(it) } ?: "", true) {}
+                if (advancedMode) {
+                    TextButton(onClick = { advanced = !advanced }) { Text(S.advanced) }
+                    if (advanced) PolicyEditor(policy, units, spaces)
                 }
-                Text(pol?.let { policySummary(it) } ?: S.invalidNumber, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton(onClick = { advanced = !advanced }) { Text(S.advanced) }
-                if (advanced) PolicyEditor(policy, units, spaces)
             }
         }
         item {
@@ -260,13 +278,14 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
                         supplierId = supplier?.id, fundId = fund!!.id, periodId = periodSel?.id, documentRef = docRef, notes = notes, policyJson = pol!!.encode(),
                     )
                     vm.run(S.saved, onSuccess = { nav.popBackStack() }) {
-                        if (existing == null) vm.repos.expenses.create(e, if (payNow) cash.firstOrNull()?.id else null) else vm.repos.expenses.update(e)
+                        val named = if (e.description.isBlank()) e.copy(description = category!!.name) else e
+                        if (existing == null) vm.repos.expenses.create(named, if (payNow) cash.firstOrNull()?.id else null) else vm.repos.expenses.update(named)
                     }
                 }, enabled = valid, modifier = Modifier.fillMaxWidth()) { Text(S.save) }
                 if (!valid) {
                     val missing = listOfNotNull(
                         S.category.takeIf { category == null }, S.amount.takeIf { (amount.value ?: 0) == 0L },
-                        S.description.takeIf { description.isBlank() }, S.date.takeIf { date.value == null },
+                        S.date.takeIf { date.value == null },
                     )
                     if (missing.isNotEmpty()) Hint(S.toSaveFill + " " + missing.joinToString("، "))
                 }
@@ -501,6 +520,19 @@ private fun LockedExpense(
                 payments.filter { it.type == EntryType.SUPPLIER_PAYMENT }.forEach { Hint("${Fmt.date(it.entryDate, building.calendar)}، ${it.reference}") }
                 if (paid < e.amountMinor) Button(onClick = onPay, Modifier.fillMaxWidth()) { Text(S.paySupplier) }
             }
+        }
+    }
+}
+
+/** One split choice: a radio row with a plain explanation underneath. */
+@Composable
+private fun SplitOption(label: String, hint: String, selected: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        androidx.compose.material3.RadioButton(selected = selected, onClick = onClick)
+        Column(Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            if (hint.isNotBlank()) Text(hint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

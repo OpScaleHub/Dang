@@ -1,5 +1,9 @@
 package com.github.opscalehub.dong.ui.screens
 
+import androidx.compose.foundation.layout.fillMaxWidth
+
+import androidx.compose.material3.Button
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -72,8 +76,11 @@ fun FinanceScreen(vm: AppViewModel, nav: NavController) {
     ScreenList {
         item {
             SectionCard {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { action = Action.PAYMENT }) { Text(S.newPayment) }
+                // The everyday action first; rare ones (refunds, transfers, opening balances) folded away.
+                var more by remember { mutableStateOf(false) }
+                Button(onClick = { action = Action.PAYMENT }, Modifier.fillMaxWidth()) { Text(S.newPayment) }
+                TextButton(onClick = { more = !more }) { Text(if (more) S.fewerActions else S.moreActions) }
+                if (more) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { action = Action.ADJUST }) { Text(S.adjustment) }
                     OutlinedButton(onClick = { action = Action.REFUND }) { Text(S.refund) }
                     OutlinedButton(onClick = { action = Action.FUND_TRANSFER }) { Text(S.fundTransfer) }

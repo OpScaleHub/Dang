@@ -129,6 +129,9 @@ class EndToEndTest {
         type("واحد در هر طبقه", "2")
         clickLast("ساختن فهرست واحدها")
         clickLast("بعدی")
+        // Step 3: how the building charges. Splitting the bills keeps this test's numbers.
+        clickLast("هر ماه قبض‌ها را بین واحدها تقسیم می‌کنم")
+        clickLast("بعدی")
         clickLast("پایان")
         waitFor("این ماه")
         val building = runBlocking { container.db.buildingDao().buildings().single() }
@@ -139,12 +142,10 @@ class EndToEndTest {
 
         // 2. expense: cleaning (per occupant), 100,000 Toman = 1,000,000 Rial
         tab("هزینه‌ها")
-        clickExpect("هزینه جدید", "شرح")
-        type("شرح", "نظافت آزمون")
-        rule.onNode(hasText("دسته") and hasClickAction()).performClick()
-        rule.waitForIdle()
-        clickLast("نظافت")
+        clickExpect("هزینه جدید", "چه هزینه‌ای؟")
+        clickLast("نظافت") // expense-type chip; its default split is by number of people
         type("مبلغ", "100000")
+        type("توضیح", "نظافت آزمون")
         // The live preview is below the fold; scroll to it and check it lists both units.
         scrollTo("چه کسی چقدر می‌پردازد")
         rule.waitUntil(5_000) { rule.onAllNodesWithText("۵۰٬۰۰۰", substring = true).fetchSemanticsNodes().size >= 2 }

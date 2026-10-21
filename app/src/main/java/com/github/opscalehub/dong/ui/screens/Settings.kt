@@ -87,6 +87,18 @@ fun SettingsScreen(vm: AppViewModel) {
         }
     }
     ScreenList {
+        item {
+            val advanced by vm.ui.advanced.collectAsState()
+            val scale by vm.ui.textScale.collectAsState()
+            SectionCard(S.displayTitle) {
+                Text(S.modeLabel, style = MaterialTheme.typography.labelLarge)
+                SingleChoice(listOf(false, true), advanced, { vm.ui.setAdvanced(it) }) { if (it) S.advancedMode else S.simpleMode }
+                Hint(S.modeHint)
+                Text(S.textSize, style = MaterialTheme.typography.labelLarge)
+                SingleChoice(com.github.opscalehub.dong.ui.UiPrefs.SCALES, com.github.opscalehub.dong.ui.UiPrefs.SCALES.minBy { kotlin.math.abs(it - scale) },
+                    { vm.ui.setTextScale(it) }) { S.textSizes[com.github.opscalehub.dong.ui.UiPrefs.SCALES.indexOf(it)] }
+            }
+        }
         item { BuildingSettingsCard(vm) }
         item {
             SectionCard(S.fundsAndCash) {

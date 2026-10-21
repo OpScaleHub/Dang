@@ -316,4 +316,60 @@ class RepositoryTest {
         expectError(OpError.INVALID_INPUT) { w.r.buildings.setup("x", "", false, 1, units + units.first(), 0, 0) }
         assertEquals(before, w.db.buildingDao().buildings().size)
     }
+
+    private val drafts = listOf(BuildingRepository.UnitDraft("۱-۱", 1, 6_000, 2), BuildingRepository.UnitDraft("۱-۲", 1, 8_000, 3))
+
+    private suspend fun World.closeMonthWithBill(b: String, amount: Long): Map<String, Long> {
+        val p = db.periodDao().periods(b).single()
+        val cat = db.expenseDao().categories(b).first { it.active && it.name == "نظافت" }
+        r.expenses.create(com.github.opscalehub.dong.data.db.ExpenseEntity(newId(), b, periodId = p.id, categoryId = cat.id, fundId = cat.defaultFundId!!,
+            date = p.startDate + 3, description = "نظافت", amountMinor = amount, policyJson = cat.defaultPolicyJson, createdAt = 0), null)
+        r.periods.finalize(p.id)
+        return r.finance.balances(b).units
+    }
+
+    @Test
+    fun `fixed monthly charge per unit charges each unit the rate and pays bills from the fund`() = runBlocking {
+        val w = world()
+        val b = w.r.buildings.setup("ثابت", "", true, 1000, drafts, 0, 0, BuildingRepository.ChargePlan.Fixed(BuildingRepository.FixedBasis.PER_UNIT, 5_000_000))
+        val cats = w.db.expenseDao().categories(b)
+        assertEquals(6, cats.count { it.active })
+        assertTrue("every bill is paid from the fund", cats.filter { it.active }.all { it.policy().fundOnly })
+        val charge = w.db.expenseDao().chargeItems(b).single()
+        assertEquals(MONTHLY_CHARGE, charge.name)
+        assertFalse(cats.first { it.id == charge.categoryId }.active)
+        val units = w.closeMonthWithBill(b, 3_000_000)
+        assertEquals(listOf(5_000_000L, 5_000_000L), w.db.buildingDao().units(b).map { units.getValue(it.id) })
+        assertTrue(w.r.finance.balances(b).reconciles)
+    }
+
+    @Test
+    fun `fixed monthly charge per person follows the number of residents`() = runBlocking {
+        val w = world()
+        val b = w.r.buildings.setup("نفری", "", true, 1000, drafts, 0, 0, BuildingRepository.ChargePlan.Fixed(BuildingRepository.FixedBasis.PER_PERSON, 1_000_000))
+        val units = w.closeMonthWithBill(b, 2_000_000)
+        assertEquals(listOf(2_000_000L, 3_000_000L), w.db.buildingDao().units(b).map { units.getValue(it.id) })
+    }
+
+    @Test
+    fun `fixed charge per square metre needs every area and a positive rate`() = runBlocking {
+        val w = world()
+        val noArea = drafts + BuildingRepository.UnitDraft("۲-۱", 2, 0, 1)
+        expectError(OpError.INVALID_INPUT) { w.r.buildings.setup("x", "", true, 1000, noArea, 0, 0, BuildingRepository.ChargePlan.Fixed(BuildingRepository.FixedBasis.PER_M2, 10_000)) }
+        expectError(OpError.INVALID_AMOUNT) { w.r.buildings.setup("x", "", true, 1000, drafts, 0, 0, BuildingRepository.ChargePlan.Fixed(BuildingRepository.FixedBasis.PER_UNIT, 0)) }
+        val b = w.r.buildings.setup("متری", "", true, 1000, drafts, 0, 0, BuildingRepository.ChargePlan.Fixed(BuildingRepository.FixedBasis.PER_M2, 10_000))
+        val units = w.closeMonthWithBill(b, 1_000_000)
+        assertEquals(listOf(600_000L, 800_000L), w.db.buildingDao().units(b).map { units.getValue(it.id) }) // 60 m², 80 m²
+    }
+
+    @Test
+    fun `splitting bills starts with six everyday expense types`() = runBlocking {
+        val w = world()
+        val b = w.r.buildings.setup("تقسیم", "", true, 1000, drafts, 0, 0, BuildingRepository.ChargePlan.SplitBills)
+        val cats = w.db.expenseDao().categories(b)
+        assertEquals(listOf("آب", "برق و گاز مشاعات", "نظافت", "آسانسور", "تعمیرات", "سایر"), cats.sortedBy { it.sortOrder }.map { it.name })
+        assertTrue(w.db.expenseDao().chargeItems(b).isEmpty())
+        val units = w.closeMonthWithBill(b, 5_000_000) // cleaning by number of people: 2 and 3
+        assertEquals(listOf(2_000_000L, 3_000_000L), w.db.buildingDao().units(b).map { units.getValue(it.id) })
+    }
 }

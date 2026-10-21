@@ -151,3 +151,12 @@ nothing else on the phone was touched.
 | Emulator by hand: share sheet → app picked → counted as sent; dismissed → not counted; «علامت ارسال»; month summary image rendered | OK |
 | Audit finding fixed: the bill image did not list credits/adjustments or later-month charges, so its lines did not add up to the amount due | fixed, covered by `BillsTest` |
 | Release v0.3.1 built, signed with the existing key, published; installed on the OnePlus Nord over Wi-Fi from the public asset (checksum verified, data kept) | OK |
+
+## 0.4.0 — simple by default (docs/11)
+
+| Check | Result |
+|---|---|
+| Unit + Robolectric, incl. new setup-plan tests (fixed charge per unit / per person / per m², area and amount validation, six everyday types when splitting bills) | 134 tests, 0 failures |
+| Instrumented E2E with the four-step wizard and the chip-based expense form | 1/1 pass |
+| Emulator by hand: fixed-charge wizard (8 units × 500,000 Toman) → Home marks bills optional → close month → «بدهی ساکنان» 4,000,000 | OK |
+| Emulator by hand: simple menu hides unused items; display settings (mode, text size); «نظر» captures the current screen; survey sends answers and score | OK |

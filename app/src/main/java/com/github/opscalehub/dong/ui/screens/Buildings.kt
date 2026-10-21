@@ -90,41 +90,44 @@ fun WelcomeScreen(vm: AppViewModel) {
 
 /** One editable unit row in the wizard; all fields stay text until [toDraft]. */
 data class UnitRow(val label: String, val floor: String, val area: String, val occupants: String) {
-    val valid: Boolean get() = label.isNotBlank() && Fmt.parseLong(floor) != null && Fmt.parseCubicMeters(area) != null && Fmt.parseLong(occupants)?.let { it >= 0 } == true
-    fun toDraft() = BuildingRepository.UnitDraft(label.trim(), Fmt.parseLong(floor)!!.toInt(), Fmt.parseCubicMeters(area)!! / 10, Fmt.parseLong(occupants)!!.toInt())
+    /** Area may be left empty (unknown); everything else is required. */
+    val valid: Boolean get() = label.isNotBlank() && Fmt.parseLong(floor) != null && (area.isBlank() || Fmt.parseCubicMeters(area) != null) &&
+        Fmt.parseLong(occupants)?.let { it >= 0 } == true
+    fun toDraft() = BuildingRepository.UnitDraft(label.trim(), Fmt.parseLong(floor)!!.toInt(), (Fmt.parseCubicMeters(area) ?: 0) / 10, Fmt.parseLong(occupants)!!.toInt())
 }
 
-/** Three steps: details → units → opening balances (optional). Creates everything atomically. */
+/**
+ * Four plain steps, one decision each: name → units → how the building charges → cash on hand.
+ * Technical settings (rounding, currency) keep their defaults and live in advanced settings.
+ * Creates everything atomically.
+ */
 @Composable
 fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = null) {
     var step by rememberSaveable { mutableIntStateOf(0) }
     var name by rememberSaveable { mutableStateOf("") }
     var address by rememberSaveable { mutableStateOf("") }
-    var toman by rememberSaveable { mutableStateOf(true) }
-    val rounding = rememberCount(1000)
     val floors = rememberCount(4)
     val perFloor = rememberCount(2)
     val rows = remember { mutableStateListOf<UnitRow>() }
-    // Opening amounts are typed in the display unit chosen in step 1.
-    val mf = MoneyFormat(0, if (toman) 10 else 1, if (toman) S.showToman else S.showRial)
-    val cash = remember(toman) { NumberFieldState("0", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
-    val reserve = remember(toman) { NumberFieldState("0", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
+    var fixed by rememberSaveable { mutableStateOf<Boolean?>(null) }
+    var basis by rememberSaveable { mutableStateOf(BuildingRepository.FixedBasis.PER_UNIT) }
+    val mf = MoneyFormat(0, 10, S.showToman)
+    val rate = remember { NumberFieldState("", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
+    val cash = remember { NumberFieldState("0", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
     val unitsValid = rows.isNotEmpty() && rows.all { it.valid } && rows.map { it.label.trim() }.toSet().size == rows.size
+    val areasKnown = rows.all { (Fmt.parseCubicMeters(it.area) ?: 0) > 0 }
+    val planValid = fixed == false || (fixed == true && (rate.value ?: 0) > 0 && (basis != BuildingRepository.FixedBasis.PER_M2 || areasKnown))
+    val titles = listOf(S.setupStep1, S.setupStep2, S.setupStepCharge, S.setupStep3)
 
     Column(Modifier.fillMaxWidth()) {
-        LinearProgressIndicator(progress = { (step + 1) / 3f }, modifier = Modifier.fillMaxWidth())
-        Text("${Fmt.number((step + 1).toLong())} ${S.of} ۳ — " + listOf(S.setupStep1, S.setupStep2, S.setupStep3)[step],
+        LinearProgressIndicator(progress = { (step + 1) / titles.size.toFloat() }, modifier = Modifier.fillMaxWidth())
+        Text("${Fmt.number((step + 1).toLong())} ${S.of} ${Fmt.number(titles.size.toLong())} — ${titles[step]}",
             Modifier.padding(16.dp), style = MaterialTheme.typography.titleMedium)
         Column(Modifier.weight(1f)) {
             when (step) {
                 0 -> ScreenList {
-                    item { TextInput(S.buildingName, name, { name = it }, error = if (name.isBlank()) S.required else null) }
-                    item { TextInput(S.address, address, { address = it }) }
-                    item {
-                        Text(S.displayCurrency, style = MaterialTheme.typography.labelLarge)
-                        SingleChoice(listOf(true, false), toman, { toman = it }) { if (it) S.showToman else S.showRial }
-                    }
-                    item { NumberInput(S.roundingIncrement, rounding, supporting = S.roundingHint) }
+                    item { TextInput(S.buildingName, name, { name = it }, supporting = S.buildingNameHint) }
+                    item { TextInput(S.addressOptional, address, { address = it }) }
                 }
                 1 -> ScreenList {
                     item {
@@ -136,19 +139,47 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
                             OutlinedButton(onClick = {
                                 rows.clear()
                                 for (f in 1..(floors.value ?: 0).toInt().coerceIn(0, 60)) for (u in 1..(perFloor.value ?: 0).toInt().coerceIn(0, 20)) {
-                                    rows += UnitRow(Fmt.digits("$f-$u"), f.toString(), "100", "2")
+                                    rows += UnitRow(Fmt.digits("$f-$u"), f.toString(), "", "2")
                                 }
                             }) { Text(S.generateUnitsButton) }
                             Hint(S.unitsHint)
                         }
                     }
                     items(rows.size) { i -> UnitRowEditor(rows[i], onChange = { rows[i] = it }, onRemove = { rows.removeAt(i) }) }
-                    item { TextButton(onClick = { rows += UnitRow("", "1", "100", "2") }) { Text(S.addRow) } }
+                    item { TextButton(onClick = { rows += UnitRow("", "1", "", "2") }) { Text(S.addRow) } }
+                }
+                2 -> ScreenList {
+                    item { Text(S.chargeQuestion, style = MaterialTheme.typography.titleMedium) }
+                    item {
+                        ChoiceCard(S.chargeFixedTitle, S.chargeFixedBody, fixed == true) { fixed = true }
+                    }
+                    if (fixed == true) item {
+                        SectionCard {
+                            Text(S.chargeFixedHow, style = MaterialTheme.typography.labelLarge)
+                            SingleChoice(BuildingRepository.FixedBasis.entries, basis, { basis = it }) {
+                                when (it) {
+                                    BuildingRepository.FixedBasis.PER_UNIT -> S.fixedPerUnit
+                                    BuildingRepository.FixedBasis.PER_PERSON -> S.fixedPerPerson
+                                    BuildingRepository.FixedBasis.PER_M2 -> S.fixedPerM2
+                                }
+                            }
+                            NumberInput(when (basis) {
+                                BuildingRepository.FixedBasis.PER_UNIT -> S.ratePerUnit
+                                BuildingRepository.FixedBasis.PER_PERSON -> S.ratePerPerson
+                                BuildingRepository.FixedBasis.PER_M2 -> S.ratePerM2
+                            }, rate)
+                            if (basis == BuildingRepository.FixedBasis.PER_M2 && !areasKnown) Hint(S.needAreas, MaterialTheme.colorScheme.error)
+                            Hint(S.chargeFixedNote)
+                        }
+                    }
+                    item {
+                        ChoiceCard(S.chargeSplitTitle, S.chargeSplitBody, fixed == false) { fixed = false }
+                    }
+                    item { Hint(S.chargeChangeLater) }
                 }
                 else -> ScreenList {
-                    item { Hint(S.openingHint) }
-                    item { NumberInput(S.openingCash, cash) }
-                    item { NumberInput(S.openingReserve, reserve) }
+                    item { Hint(S.openingCashHint) }
+                    item { NumberInput(S.openingCashSimple, cash) }
                 }
             }
         }
@@ -156,14 +187,37 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
             if (step > 0) OutlinedButton(onClick = { step-- }) { Text(S.previousStep) } else if (onCancel != null) TextButton(onClick = onCancel) { Text(S.cancel) }
             Spacer(Modifier.weight(1f))
             when (step) {
-                0 -> Button(onClick = { step = 1 }, enabled = name.isNotBlank() && (rounding.value ?: 0) >= 1) { Text(S.next) }
+                0 -> Button(onClick = { step = 1 }, enabled = name.isNotBlank()) { Text(S.next) }
                 1 -> Button(onClick = { step = 2 }, enabled = unitsValid) { Text(S.next) }
+                2 -> Button(onClick = { step = 3 }, enabled = planValid) { Text(S.next) }
                 else -> Button(onClick = {
                     vm.run(S.saved, onSuccess = onDone) {
-                        val id = vm.repos.buildings.setup(name, address, toman, rounding.value ?: 1, rows.map { it.toDraft() }, cash.value ?: 0, reserve.value ?: 0)
+                        val plan = if (fixed == true) BuildingRepository.ChargePlan.Fixed(basis, rate.value!!) else BuildingRepository.ChargePlan.SplitBills
+                        val id = vm.repos.buildings.setup(name, address, true, 1000, rows.map { it.toDraft() }, cash.value ?: 0, 0, plan)
                         vm.select(id)
                     }
-                }, enabled = cash.valid && reserve.valid) { Text(S.finish) }
+                }, enabled = cash.valid) { Text(S.finish) }
+            }
+        }
+    }
+}
+
+/** A large tappable option: title, one-line explanation, selected state. */
+@Composable
+private fun ChoiceCard(title: String, body: String, selected: Boolean, onClick: () -> Unit) {
+    androidx.compose.material3.OutlinedCard(
+        onClick = onClick, modifier = Modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.outlinedCardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerLow),
+        border = androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp,
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.RadioButton(selected = selected, onClick = onClick)
+            Spacer(Modifier.width(8.dp))
+            Column {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(body, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

@@ -10,7 +10,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -99,9 +101,12 @@ private fun typography(): Typography {
 
 /** The whole app is Persian: layout is always right-to-left regardless of the device locale. */
 @Composable
-fun DongTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun DongTheme(dark: Boolean = isSystemInDarkTheme(), textScale: Float = 1f, content: @Composable () -> Unit) {
+    val d = LocalDensity.current
     MaterialTheme(colorScheme = if (dark) Dark else Light, typography = typography()) {
         CompositionLocalProvider(
+            // In-app text size (Settings) on top of Android's own font scale.
+            LocalDensity provides Density(d.density, d.fontScale * textScale),
             LocalLayoutDirection provides LayoutDirection.Rtl,
             LocalViz provides if (dark) VizDark else VizLight,
             content = content,
