@@ -58,7 +58,7 @@ import com.github.opscalehub.dong.ui.rememberCount
 
 /** Creates the synthetic demo building in one transaction and selects it. */
 fun loadDemo(vm: AppViewModel, onDone: () -> Unit = {}) = vm.run(S.sampleCreated, onSuccess = onDone) {
-    val id = vm.repos.tx { SampleData.createBuilding(vm.repos, "ساختمان نمایشی (ساختگی)").also { SampleData.addDemoData(vm.repos, it) } }
+    val id = vm.repos.tx { SampleData.createBuilding(vm.repos, SampleData.DEMO_NAME, SampleData.DEMO_HISTORY).also { SampleData.addDemoData(vm.repos, it, SampleData.DEMO_HISTORY) } }
     vm.select(id)
 }
 

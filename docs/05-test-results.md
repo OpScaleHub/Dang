@@ -184,3 +184,11 @@ nothing else on the phone was touched.
 | Unit + Robolectric incl. reordering units (complete order required) | 142 tests, 0 failures |
 | Instrumented E2E | 1/1 pass |
 | Emulator by hand: ▲▼ in the Units tab reorders at once; elevator expense no longer offers the water-meter split | OK |
+
+## 0.4.4 — year-long demo
+
+| Check | Result |
+|---|---|
+| Unit + Robolectric incl. the year demo loading on 30 Mehr, 1 Farvardin, 29 Esfand 1404, 30 Esfand 1403 (leap) and 31 Shahrivar: 12 months, 11 finalized, ledger reconciles, debtors, a credit and a reversal present; the reference demo and its workbook checks unchanged | 143 tests, 0 failures |
+| Instrumented E2E | 1/1 pass |
+| Emulator by hand: welcome → «امتحان با یک ساختمان نمونه (یک سال داده)» → building «نمونه»; Home shows the current month open, 8 units owe; Units shows debt ageing with 4-2 over a month; Reports switch between months with collection rates and month-to-month comparison | OK |

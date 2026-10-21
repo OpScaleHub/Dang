@@ -5,6 +5,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.github.opscalehub.dong.data.db.DongDatabase
 import com.github.opscalehub.dong.domain.calendar.Jalali
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -28,6 +29,35 @@ class SampleDataTest {
                     fail("day ${Jalali.fromEpochDay(day)}: ${e.code} ${e.detail}")
                 }
                 assertTrue(r.finance.balances(b).reconciles)
+            } finally {
+                db.close()
+            }
+        }
+    }
+
+    /** The in-app demo: a year of months (all closed but the current one) with debts, credits and a bounced cheque. */
+    @Test
+    fun `year demo loads for many dates and shows varied balances`() = runBlocking {
+        val days = listOf(Jalali.toEpochDay(1405, 7, 30), Jalali.toEpochDay(1405, 1, 1), Jalali.toEpochDay(1404, 12, 29),
+            Jalali.toEpochDay(1403, 12, 30), Jalali.toEpochDay(1405, 6, 31))
+        for (day in days) {
+            val db = DongDatabase.build(ApplicationProvider.getApplicationContext(), null)
+            try {
+                val r = Repos(db, FixedClock(day))
+                val b = SampleData.createBuilding(r, SampleData.DEMO_NAME, SampleData.DEMO_HISTORY)
+                try {
+                    SampleData.addDemoData(r, b, SampleData.DEMO_HISTORY)
+                } catch (e: OpException) {
+                    fail("day ${Jalali.fromEpochDay(day)}: ${e.code} ${e.detail}")
+                }
+                val bal = r.finance.balances(b)
+                assertTrue(bal.reconciles)
+                val periods = db.periodDao().periods(b)
+                assertEquals(12, periods.size)
+                assertEquals(11, periods.count { it.status == com.github.opscalehub.dong.data.db.PeriodStatus.FINALIZED })
+                assertTrue("some units owe", bal.units.values.count { it > 0 } >= 2)
+                assertTrue("some unit is ahead", bal.units.values.any { it < 0 })
+                assertTrue("a payment was reversed", db.financeDao().entries(b).any { it.type == com.github.opscalehub.dong.domain.ledger.EntryType.REVERSAL })
             } finally {
                 db.close()
             }

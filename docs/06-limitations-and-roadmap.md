@@ -41,6 +41,7 @@ target, late fees.
 
 | Priority | Item | Notes |
 |---|---|---|
+| P0 | **Testers' feedback round on 0.4.x** (next step, 2026-10-21) | Testers use «نظر» and the survey (docs/12); synthesize per docs/10 step 4 before building more. Open UX suggestions: "what is this page?" help, undo snackbar after saving (docs/09). Handover: docs/13 |
 | P1 | Share bills to all debtors in one go | Partly done in 0.3.1: «ارسال قبض واحدها» lists every unit with sent status; each bill still opens its own share sheet |
 | P1 | F-Droid / Play listing | Signed releases and in-app updates exist since 0.2.0/0.3.0 |
 | P2 | Receipt photos (content URI + migration v5) | Backup must then include files (zip) |

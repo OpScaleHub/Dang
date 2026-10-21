@@ -61,7 +61,7 @@ object S {
     const val roundingIncrement = "گرد کردن سهم‌ها (به ریال)"
     const val roundingHint = "مثلاً ۱۰۰۰ یعنی سهم‌ها به مضرب ۱۰۰۰ گرد می‌شوند؛ باقیمانده حذف نمی‌شود و به روش بزرگ‌ترین باقیمانده توزیع می‌شود."
     const val currencyName = "نام واحد پول"
-    const val createSampleDemo = "ساختمان نمونه + داده‌های نمایشی"
+    const val createSampleDemo = "امتحان با یک ساختمان نمونه (یک سال داده)"
     const val sampleCreated = "ساختمان نمونه ساخته شد. داده‌ها ساختگی‌اند و قابل ویرایش."
     const val switchBuilding = "تغییر ساختمان"
     // «بیشتر» menu subtitles: one short line each

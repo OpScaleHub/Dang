@@ -124,6 +124,12 @@ docs/          requirements, domain model, plan, architecture, tests, roadmap
 5. [Test results](docs/05-test-results.md)
 6. [Known limitations and roadmap](docs/06-limitations-and-roadmap.md)
 7. [UX & reporting overhaul plan](docs/07-ux-plan.md)
+8. [Branding and the rename to دنگ / Dang](docs/08-branding-and-rename.md)
+9. [Usability review (0.3.2)](docs/09-usability-review.md)
+10. [UX research plan and Persian test kit](docs/10-ux-research-plan.md)
+11. [0.4 "simple by default" design, 0.4.1–0.4.4](docs/11-v0.4-simple-design.md)
+12. [Message for testers](docs/12-tester-message.md)
+13. [**Project history, decisions and lessons** — start here when resuming](docs/13-project-history-and-lessons.md)
 
 All sample data in this repository is synthetic.
 

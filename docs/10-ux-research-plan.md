@@ -101,7 +101,7 @@ and compare task success, time, errors and SUS.
 می‌رسد بلند بگویید: کجا را نگاه می‌کنید، چه انتظاری دارید، چه چیزی گیجتان می‌کند. من کمکی
 نمی‌کنم چون می‌خواهم ببینم برنامه بدون کمک چطور است.»
 
-Use the demo building («ساختمان نمونه + داده‌های نمایشی»). The tasks describe goals, never
+Use the demo building («امتحان با یک ساختمان نمونه (یک سال داده)», which creates the building «نمونه»). The tasks describe goals, never
 button names.
 
 | # | Task (read to the participant) | Success = |
