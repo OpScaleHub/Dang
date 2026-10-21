@@ -199,7 +199,7 @@ object Fa {
         code.startsWith("RESTORE_") -> "بازیابی از پشتیبان"
         else -> mapOf(
             "CREATE_BUILDING" to "ایجاد ساختمان", "UPDATE_SETTINGS" to "تغییر تنظیمات", "CREATE_UNIT" to "ایجاد واحد", "UPDATE_UNIT" to "ویرایش واحد",
-            "SET_OCCUPANCY" to "تغییر تعداد ساکنان", "DELETE_OCCUPANCY" to "حذف سابقه سکونت", "SAVE_PARKING_SPACE" to "ثبت جای پارک", "END_PARKING" to "واگذاری جای پارک",
+            "SET_OCCUPANCY" to "تغییر تعداد ساکنان", "DELETE_OCCUPANCY" to "حذف سابقه سکونت", "SAVE_PARKING_SPACE" to "ثبت جای پارک", "END_PARKING" to "واگذاری جای پارک", "REORDER_UNITS" to "تغییر ترتیب واحدها",
             "ASSIGN_PARKING" to "تخصیص پارکینگ", "SAVE_METER" to "ثبت کنتور", "ADD_READING" to "ثبت قرائت", "CORRECT_READING" to "اصلاح قرائت",
             "DELETE_READING" to "حذف قرائت", "REPLACE_METER" to "تعویض کنتور", "SAVE_TARIFF" to "ثبت تعرفه", "SAVE_CATEGORY" to "ثبت دسته هزینه",
             "UPDATE_EXPENSE" to "ویرایش هزینه", "VOID_EXPENSE" to "ابطال هزینه", "SAVE_CHARGE_ITEM" to "ثبت شارژ ثابت", "CREATE_PERIOD" to "ساختن ماه",

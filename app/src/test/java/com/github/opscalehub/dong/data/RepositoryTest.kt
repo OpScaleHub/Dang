@@ -449,4 +449,16 @@ class RepositoryTest {
         assertEquals(listOf("۱", "۲", "۳"), w.db.buildingDao().spaces(b).map { it.label }.sorted())
         expectError(OpError.INVALID_INPUT) { w.r.buildings.setParkingCount(c, -1, day) }
     }
+
+    @Test
+    fun `units can be reordered and the order must name every unit once`() = runBlocking {
+        val w = world()
+        val b = w.r.buildings.setup("ترتیب", "", true, 1000, drafts + BuildingRepository.UnitDraft("سه", 1, 0, 1), 0, 0)
+        val ids = w.db.buildingDao().units(b).map { it.id }
+        val wanted = listOf(ids[0], ids[1], ids[2]).let { listOf(it[0], it[2], it[1]) } // the extra unit moves up
+        w.r.buildings.reorderUnits(b, wanted)
+        assertEquals(wanted, w.db.buildingDao().units(b).map { it.id })
+        expectError(OpError.INVALID_INPUT) { w.r.buildings.reorderUnits(b, wanted.dropLast(1)) }
+        expectError(OpError.INVALID_INPUT) { w.r.buildings.reorderUnits(b, listOf(ids[0], ids[0], ids[1])) }
+    }
 }

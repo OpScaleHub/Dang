@@ -28,6 +28,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -171,8 +173,13 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
                             Hint(S.unitsHint)
                         }
                     }
-                    items(rows.size) { i -> UnitRowEditor(rows[i], onChange = { rows[i] = it }, onRemove = { rows.removeAt(i) }) }
+                    items(rows.size) { i ->
+                        UnitRowEditor(rows[i], onChange = { rows[i] = it }, onRemove = { rows.removeAt(i) },
+                            onUp = if (i > 0) ({ rows.add(i - 1, rows.removeAt(i)) }) else null,
+                            onDown = if (i < rows.size - 1) ({ rows.add(i + 1, rows.removeAt(i)) }) else null)
+                    }
                     item { TextButton(onClick = { rows += UnitRow("", "1", "", "2", parkingAll) }) { Text(S.addRow) } }
+                    if (rows.size > 1) item { Hint(S.moveHint) }
                 }
                 2 -> ScreenList {
                     item { Text(S.billsQuestion, style = MaterialTheme.typography.titleMedium) }
@@ -283,13 +290,24 @@ private fun ChoiceCard(title: String, body: String, selected: Boolean, onClick: 
     }
 }
 
+/** ▲▼ to move a unit up or down the list; a missing action greys its arrow out. */
+@Composable
+fun MoveButtons(onUp: (() -> Unit)?, onDown: (() -> Unit)?) {
+    androidx.compose.material3.IconButton(onClick = { onUp?.invoke() }, enabled = onUp != null) {
+        Text("▲", Modifier.semantics { contentDescription = S.moveUp })
+    }
+    androidx.compose.material3.IconButton(onClick = { onDown?.invoke() }, enabled = onDown != null) {
+        Text("▼", Modifier.semantics { contentDescription = S.moveDown })
+    }
+}
+
 /** «ندارد، ۱، ۲، ۳» parking spaces. */
 @Composable
 private fun ParkingChips(count: Int, onChange: (Int) -> Unit) =
     SingleChoice((0..3).toList(), count, onChange) { if (it == 0) S.noParking else Fmt.number(it.toLong()) }
 
 @Composable
-private fun UnitRowEditor(r: UnitRow, onChange: (UnitRow) -> Unit, onRemove: () -> Unit) {
+private fun UnitRowEditor(r: UnitRow, onChange: (UnitRow) -> Unit, onRemove: () -> Unit, onUp: (() -> Unit)?, onDown: (() -> Unit)?) {
     val num = KeyboardOptions(keyboardType = KeyboardType.Decimal)
     Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -302,6 +320,9 @@ private fun UnitRowEditor(r: UnitRow, onChange: (UnitRow) -> Unit, onRemove: () 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(S.parkingLabel, style = MaterialTheme.typography.labelLarge)
             ParkingChips(r.parking) { onChange(r.copy(parking = it)) }
+            Spacer(Modifier.weight(1f))
+            // Move the row, e.g. an extra unit added at the end that belongs on the first floor.
+            MoveButtons(onUp, onDown)
         }
     }
 }

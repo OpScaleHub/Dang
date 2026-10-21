@@ -95,6 +95,7 @@ fun UnitsScreen(vm: AppViewModel, nav: NavController, collect: Boolean = false) 
     val assignments by vm.assignments.collectAsState()
     val report by derived(vm, building.id) { vm.reports.load(building.id) }
     var adding by remember { mutableStateOf(false) }
+    var reordering by remember { mutableStateOf(false) }
     var filter by remember { mutableStateOf(if (collect) UnitFilter.OWES else UnitFilter.ALL) }
     var paying by remember { mutableStateOf<UnitEntity?>(null) }
     var payingAny by remember { mutableStateOf(false) }
@@ -146,16 +147,42 @@ fun UnitsScreen(vm: AppViewModel, nav: NavController, collect: Boolean = false) 
                 }
             }
             if (!collect) item {
-                SingleChoice(UnitFilter.entries, filter, { filter = it }) {
-                    when (it) { UnitFilter.ALL -> S.allUnits; UnitFilter.OWES -> S.owes; UnitFilter.SETTLED -> S.settledOrCredit }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        if (!reordering) SingleChoice(UnitFilter.entries, filter, { filter = it }) {
+                            when (it) { UnitFilter.ALL -> S.allUnits; UnitFilter.OWES -> S.owes; UnitFilter.SETTLED -> S.settledOrCredit }
+                        }
+                    }
+                    if (units.size > 1) TextButton(onClick = { reordering = !reordering; filter = UnitFilter.ALL }) {
+                        Text(if (reordering) S.reorderDone else S.reorderUnits)
+                    }
                 }
+                if (reordering) Hint(S.moveHint)
             }
             val shown = units.filter { u ->
                 val bal = balances[u.id] ?: 0
                 when (filter) { UnitFilter.ALL -> true; UnitFilter.OWES -> bal > 0; UnitFilter.SETTLED -> bal <= 0 }
             }.let { l -> if (collect) l.sortedByDescending { balances[it.id] ?: 0 } else l }
             if (units.isEmpty()) item { EmptyState(S.empty, S.unitsHint, S.newUnit) { adding = true } }
-            items(shown.size) { i ->
+            // Reordering: ▲▼ on each unit, saved at once (the whole list, so the order is always complete).
+            if (reordering) items(units.size) { i ->
+                val u = units[i]
+                fun move(to: Int) = vm.run {
+                    vm.repos.buildings.reorderUnits(building.id, units.map { it.id }.toMutableList().apply { add(to, removeAt(i)) })
+                }
+                SectionCard {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        UnitChip(u.label)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("${S.unit} ${u.label}", style = MaterialTheme.typography.titleMedium)
+                            Hint("${S.floor} ${Fmt.number(u.floor.toLong())}")
+                        }
+                        MoveButtons(if (i > 0) ({ move(i - 1) }) else null, if (i < units.size - 1) ({ move(i + 1) }) else null)
+                    }
+                }
+            }
+            if (!reordering) items(shown.size) { i ->
                 val u = shown[i]
                 SectionCard {
                     ClickRow({ nav.navigate(Routes.unit(u.id)) }) {

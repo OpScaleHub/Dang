@@ -233,7 +233,7 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
                 // Simple mode: a few named choices with what each one means. Advanced mode adds the
                 // last-used policy and the full formula editor.
                 val last = expenses.filter { it.categoryId == category?.id && it.id != existing?.id && it.status == ExpenseStatus.ACTIVE }.maxByOrNull { it.createdAt }
-                val options = plainSplits(meters.isNotEmpty() || advancedMode, spaces.isNotEmpty(), chargeItems.any { it.active }) + buildList {
+                val options = plainSplits((meters.isNotEmpty() && category?.isWater == true) || advancedMode, spaces.isNotEmpty(), chargeItems.any { it.active }) + buildList {
                     if (advancedMode) last?.let { add(Triple(S.presetLast, policySummary(it.policy()), it.policy())) }
                 }
                 // Multipliers: a weighted split edited as «۱×، ۲×…» per unit (e.g. elevator by floor).
@@ -336,7 +336,10 @@ fun ExpenseScreen(vm: AppViewModel, nav: NavController, expenseId: String) {
 
 }
 
-/** The named split choices of simple mode, each with what it means (expense form and expense types). */
+/**
+ * The named split choices of simple mode, each with what it means (expense form and expense types).
+ * [meters] is true only for the water type: no other bill is read per unit.
+ */
 fun plainSplits(meters: Boolean, parking: Boolean, fixedCharge: Boolean) = buildList {
     add(Triple(S.splitEqual, S.splitEqualHint, AllocationPolicy.single(Basis.Equal)))
     add(Triple(S.splitPeople, S.splitPeopleHint, AllocationPolicy.single(Basis.Occupants)))
@@ -407,7 +410,7 @@ fun CategoriesScreen(vm: AppViewModel) {
                 // Simple mode: the same named choices as the expense form; anything else stays as it is.
                 Text(S.howToSplit, style = MaterialTheme.typography.labelLarge)
                 val pol = policy.toPolicy()
-                val opts = plainSplits(meters.isNotEmpty(), spaces.isNotEmpty(), chargeItems.any { it.active })
+                val opts = plainSplits(meters.isNotEmpty() && water, spaces.isNotEmpty(), chargeItems.any { it.active })
                 opts.forEach { (label, hint, p) -> SplitOption(label, hint, pol == p) { policy.reset(p) } }
                 if (pol != null && opts.none { it.third == pol }) SplitOption(splitName(pol, true, true), "", true) {}
             }

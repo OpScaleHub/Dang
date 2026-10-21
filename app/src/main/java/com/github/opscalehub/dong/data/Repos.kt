@@ -292,6 +292,14 @@ class BuildingRepository(private val r: Repos) {
         u.id
     }
 
+    /** Puts the building's units in [orderedIds] order; lists, bills and reports follow it. */
+    suspend fun reorderUnits(buildingId: String, orderedIds: List<String>) = r.tx {
+        val byId = dao.units(buildingId).associateBy { it.id }
+        if (orderedIds.size != byId.size || orderedIds.toSet() != byId.keys) fail(OpError.INVALID_INPUT, "order")
+        orderedIds.forEachIndexed { i, id -> dao.upsertUnit(byId.getValue(id).copy(sortOrder = i + 1)) }
+        r.journal.audit(buildingId, "REORDER_UNITS", "building", buildingId, orderedIds.joinToString("، ") { byId.getValue(it).label })
+    }
+
     suspend fun nextUnitSortOrder(buildingId: String) = (dao.units(buildingId).maxOfOrNull { it.sortOrder } ?: 0) + 1
 
     /** Records an occupancy change effective from [effectiveFrom]. History is kept; finalized snapshots are unaffected. */

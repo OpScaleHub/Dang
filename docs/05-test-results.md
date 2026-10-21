@@ -176,3 +176,11 @@ nothing else on the phone was touched.
 | Unit + Robolectric incl. setup with unit meters + parking + shared gas, «own water» building then meters generated later, parking sale between units (freed space reused), meters that nobody splits by never block a month | 141 tests, 0 failures |
 | Instrumented E2E (wizard now picks unit water meters; asserts 3 meters and 2 parking spaces) | 1/1 pass |
 | Emulator by hand: 4×2 building → 9 meters and 8 parking spaces from the wizard; month closable without readings; shared-water building → «ساختن کنتور برای همه واحدها» made 9 meters; unit edit with residents and parking; simple «شارژ ماهانه», «انواع هزینه», parking, settings, readings screens | OK |
+
+## 0.4.3 — unit order, meter split only for water
+
+| Check | Result |
+|---|---|
+| Unit + Robolectric incl. reordering units (complete order required) | 142 tests, 0 failures |
+| Instrumented E2E | 1/1 pass |
+| Emulator by hand: ▲▼ in the Units tab reorders at once; elevator expense no longer offers the water-meter split | OK |
