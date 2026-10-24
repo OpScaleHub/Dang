@@ -13,7 +13,7 @@ class AppContainer(app: Application) {
     val repos = Repos(db)
     val backup = BackupRepository(repos, BuildConfig.VERSION_NAME)
     val reports = ReportRepository(repos)
-    val updater = Updater(app, BuildConfig.VERSION_CODE, BuildConfig.UPDATE_URLS.split(','), autoCheckAllowed = !BuildConfig.DEBUG || BuildConfig.UPDATE_AUTO_DEBUG)
+    val updater = Updater(app, BuildConfig.VERSION_CODE, BuildConfig.UPDATE_URLS.split(','), autoCheckAllowed = BuildConfig.UPDATES_ENABLED && (!BuildConfig.DEBUG || BuildConfig.UPDATE_AUTO_DEBUG))
 }
 
 class DongApp : Application() {

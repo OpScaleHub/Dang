@@ -1,5 +1,6 @@
 package com.github.opscalehub.dong.ui
 
+import com.github.opscalehub.dong.BuildConfig
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -47,6 +48,8 @@ private fun ver(info: ReleaseInfo) = Fmt.digits(info.version)
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun UpdateCard(updater: Updater, inSettings: Boolean = false) {
+    // The Bazaar edition is updated by the store; it has no updater UI.
+    if (!BuildConfig.UPDATES_ENABLED) return
     val state by updater.state.collectAsState()
     val dismissed by updater.dismissed.collectAsState()
     val context = LocalContext.current
