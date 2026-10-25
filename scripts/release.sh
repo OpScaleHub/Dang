@@ -78,6 +78,9 @@ APK=app/build/outputs/apk/release/app-release.apk
 [ -f "$APK" ] || die "release APK missing (is the signing config valid?)"
 OUT=build/release; mkdir -p "$OUT"
 cp "$APK" "$OUT/dang.apk"; cp "$APK" "$OUT/dang-$next.apk"
+say "Building signed Cafe Bazaar APK (no self-updater)"
+./gradlew -q --console=plain assembleRelease -Pstore=bazaar
+cp "$APK" "$OUT/dang-bazaar-$next.apk"
 SHA=$(sha256sum "$OUT/dang.apk" | cut -d' ' -f1)
 SIZE=$(stat -c %s "$OUT/dang.apk")
 APKSIGNER=$(ls -d "${ANDROID_HOME:-$HOME/Android/Sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)
@@ -139,7 +142,7 @@ git tag -a "$TAG" -m "Dang $next"
 git push -q origin main "$TAG"
 
 say "Publishing GitHub Release"
-gh release create "$TAG" "$OUT/dang.apk" "$OUT/dang-$next.apk" \
+gh release create "$TAG" "$OUT/dang.apk" "$OUT/dang-$next.apk" "$OUT/dang-bazaar-$next.apk" \
   --repo "$REPO" --title "دنگ $next" --notes-file "$OUT/notes.md" --latest
 
 say "Done: https://github.com/$REPO/releases/tag/$TAG"

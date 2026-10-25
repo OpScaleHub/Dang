@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cafe Bazaar edition (-Pstore=bazaar): Bazaar delivers updates, so the self-updater's
+     permissions and receiver are removed. The app then makes no network access at all. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" tools:node="remove" />
+
+    <application>
+        <receiver android:name=".update.UpdateReceiver" tools:node="remove" />
+    </application>
+</manifest>

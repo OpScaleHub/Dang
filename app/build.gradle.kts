@@ -11,6 +11,10 @@ plugins {
 // Version lives in /version.properties so scripts/release.sh can bump it.
 val versionProps = Properties().apply { rootProject.file("version.properties").inputStream().use { load(it) } }
 
+// -Pstore=bazaar builds the Cafe Bazaar edition: no self-updater, so no INTERNET or
+// REQUEST_INSTALL_PACKAGES permission (Bazaar delivers updates itself). See src/bazaar/.
+val bazaar = findProperty("store") == "bazaar"
+
 // Release signing key stays outside the repo. Point DONG_SIGNING at a properties file with
 // storeFile, storePassword, keyAlias, keyPassword (default: ~/.config/dong/signing.properties).
 val signingProps = (System.getenv("DONG_SIGNING") ?: "${System.getProperty("user.home")}/.config/dong/signing.properties")
@@ -37,6 +41,7 @@ android {
         val updateUrls = updateUrl ?: "https://opscalehub.github.io/Dang/release.json,https://opscalehub.github.io/Dong/release.json"
         buildConfigField("String", "UPDATE_URLS", "\"$updateUrls\"")
         buildConfigField("boolean", "UPDATE_AUTO_DEBUG", "${updateUrl != null}")
+        buildConfigField("boolean", "UPDATES_ENABLED", "${!bazaar}")
     }
 
     signingConfigs {
@@ -74,6 +79,8 @@ android {
         // Exported Room schemas are read by MigrationTestHelper in Robolectric tests, which see the
         // merged debug assets. Debug builds only; release APKs do not contain them.
         getByName("debug").assets.srcDir("$projectDir/schemas")
+        // The Bazaar edition overlays a manifest that strips the updater's permissions and receiver.
+        if (bazaar) getByName("release").manifest.srcFile("src/bazaar/AndroidManifest.xml")
     }
     testOptions {
         unitTests {
