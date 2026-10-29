@@ -53,6 +53,14 @@ android {
         }
     }
     buildTypes {
+        // Debug builds get their own package name, so they install next to the
+        // release (Cafe Bazaar / GitHub) app instead of over it. Two signing keys
+        // can never share one package name — that collision is what kept
+        // blocking release installs on the test phone.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
