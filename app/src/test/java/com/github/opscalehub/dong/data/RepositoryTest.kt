@@ -317,6 +317,47 @@ class RepositoryTest {
         assertEquals(before, w.db.buildingDao().buildings().size)
     }
 
+    @Test
+    fun `past unit balances from the wizard can be edited until the first month closes`() = runBlocking {
+        val w = world()
+        expectError(OpError.INVALID_INPUT) { w.r.buildings.setup("x", "", true, 1000, drafts, 0, 0, unitOpenings = listOf(1L)) }
+        val b = w.r.buildings.setup("قبلی", "", true, 1000, drafts, 5_000_000, 0, unitOpenings = listOf(1_200_000L, -300_000L))
+        val ids = w.db.buildingDao().units(b).sortedBy { it.sortOrder }.map { it.id }
+        val first = w.db.periodDao().periods(b).single()
+        var bal = w.r.finance.balances(b)
+        assertEquals(1_200_000L, bal.units.getValue(ids[0]))
+        assertEquals(-300_000L, bal.units.getValue(ids[1]))
+        assertEquals(5_900_000L, bal.funds.getValue(w.r.finance.operatingFundId(b)))
+        assertTrue(bal.reconciles)
+
+        // One unit corrected: the old entry is reversed on its own date, the new one sits before the first month.
+        assertTrue(w.r.finance.openingEditable(b))
+        w.r.finance.setUnitOpening(b, ids[1], 0)
+        val op = w.r.finance.opening(b)
+        assertEquals(mapOf(ids[0] to 1_200_000L), op.units)
+        assertEquals(5_000_000L, op.cash.values.sum())
+        assertEquals(first.startDate - 1, op.date)
+        val entries = w.db.financeDao().entries(b)
+        assertEquals(listOf(first.startDate - 1), entries.filter { it.type == EntryType.REVERSAL }.map { it.entryDate })
+        // Saving the same values again changes nothing.
+        w.r.finance.setOpening(b, op.cash, op.units, op.funds)
+        assertEquals(entries.size, w.db.financeDao().entries(b).size)
+        // The month's statement shows it as the balance from before, not as a payment or an adjustment.
+        val st = w.r.finance.unitStatement(b, ids[0], first.startDate, null)
+        assertEquals(1_200_000L, st.opening)
+        assertEquals(0L, st.creditsAndAdjustments)
+        bal = w.r.finance.balances(b)
+        assertEquals(0L, bal.units.getValue(ids[1]))
+        assertTrue(bal.reconciles)
+
+        // Once the first month is closed the past is fixed; corrections go through «اصلاح حساب واحد».
+        w.closeMonthWithBill(b, 1_000_000)
+        assertFalse(w.r.finance.openingEditable(b))
+        expectError(OpError.OPENING_LOCKED) { w.r.finance.setUnitOpening(b, ids[0], 0) }
+        expectError(OpError.OPENING_LOCKED) { w.r.finance.reverse(op.entryId!!, "اشتباه") }
+        assertTrue(w.r.finance.balances(b).reconciles)
+    }
+
     private val drafts = listOf(BuildingRepository.UnitDraft("۱-۱", 1, 6_000, 2), BuildingRepository.UnitDraft("۱-۲", 1, 8_000, 3))
 
     private suspend fun World.closeMonthWithBill(b: String, amount: Long): Map<String, Long> {

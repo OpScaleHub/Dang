@@ -46,6 +46,15 @@ links to them.
   a recalculation with a revision (docs/02). Consequence that bit us in code: nothing may be
   written into a finalized month's dates (readings, payments, assignments), so generators must
   write data in time order.
+- **Opening balances («مانده‌های اول کار») can change only until the first month is closed**
+  (owner's rule, 2026-11-13). Many buildings start using Dang mid-way, with cash in the pot and
+  units already in debt or paid ahead. The wizard's last step («حساب‌های قبلی») takes the cash and,
+  optionally, each unit's past debt or prepayment, entered as an amount plus «بدهکار است /
+  پیش‌پرداخت داده», never as a signed number. Until the first close they can be changed from
+  «همه تراکنش‌ها» or a unit's page («بدهی/طلب قبلی»): the old entry is reversed on its own date
+  and a new one posted the day before the first month. After the first close the past is fixed;
+  a unit's balance is corrected with «اصلاح حساب واحد», dated today with a reason. Rewriting
+  closed months would break the trust the journal exists for.
 - **Payments are balance-forward** (not matched to single charges); ageing uses oldest-first
   settlement. Simpler for managers; listed as a limitation in docs/06.
 

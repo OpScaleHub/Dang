@@ -175,13 +175,16 @@ class BuildingRepository(private val r: Repos) {
 
     /**
      * Setup wizard in one transaction: building, units with occupancy, optional opening
-     * cash/reserve, and the current month as the first (draft) period.
+     * cash/reserve and unit balances ([unitOpenings] in unit order, positive = owes), and the
+     * current month as the first (draft) period.
      */
     suspend fun setup(
         name: String, address: String, displayToman: Boolean, roundingIncrement: Long,
         units: List<UnitDraft>, openingCash: Long, openingReserve: Long, plan: ChargePlan = ChargePlan.SplitBills,
         bills: SharedBills = SharedBills(),
+        unitOpenings: List<Long> = emptyList(),
     ): String = r.tx {
+        if (unitOpenings.isNotEmpty() && unitOpenings.size != units.size) fail(OpError.INVALID_INPUT, "unit openings")
         if (units.isEmpty() || units.any { it.label.isBlank() || it.areaCentiM2 < 0 || it.occupants < 0 || it.parking !in 0..MAX_PARKING }) fail(OpError.INVALID_INPUT, "units")
         if (units.map { it.label.trim() }.toSet().size != units.size) fail(OpError.INVALID_INPUT, "duplicate label")
         if (plan is ChargePlan.Fixed) {
@@ -201,11 +204,12 @@ class BuildingRepository(private val r: Repos) {
         }
         // The water category already splits by meter (simpleCategories); only the meters are missing.
         if (bills.water == WaterSetup.METERED) r.water.generateMeters(b, splitWaterByMeter = false)
-        if (openingCash != 0L || openingReserve != 0L) {
+        if (openingCash != 0L || openingReserve != 0L || unitOpenings.any { it != 0L }) {
             val fin = r.db.financeDao()
             val cash = fin.cashAccounts(b).first().id
             val reserve = fin.funds(b).first { it.kind == FundKind.RESERVE }.id
-            r.finance.postOpening(b, month.start - 1, mapOf(cash to openingCash), emptyMap(), emptyMap(), mapOf(reserve to openingReserve))
+            val ids = r.db.buildingDao().units(b).sortedBy { it.sortOrder }.map { it.id }
+            r.finance.postOpening(b, month.start - 1, mapOf(cash to openingCash), ids.zip(unitOpenings).toMap(), emptyMap(), mapOf(reserve to openingReserve))
         }
         if (plan is ChargePlan.Fixed) {
             val cat = r.db.expenseDao().categories(b).first { !it.active }
