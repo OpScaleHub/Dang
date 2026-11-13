@@ -100,7 +100,8 @@ data class UnitRow(val label: String, val floor: String, val area: String, val o
 
 /**
  * Five plain steps, one decision each: name → units (with parking) → which bills are shared (and
- * whether units have their own water meters) → how the building charges → cash on hand.
+ * whether units have their own water meters) → how the building charges → cash on hand and, if
+ * the building is not new to accounting, each unit's debt or prepayment from before.
  * Meters and parking spaces are generated from the units, never added one by one.
  * Technical settings (rounding, currency) keep their defaults and live in advanced settings.
  * Creates everything atomically.
@@ -126,6 +127,12 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
     var differ by rememberSaveable { mutableStateOf(false) }
     val weights = remember { mutableStateListOf<Long>() }
     val cash = remember { NumberFieldState("0", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
+    // Past balances per unit, keyed by label so they survive going back and reordering.
+    var pastBalances by rememberSaveable { mutableStateOf(false) }
+    val pastAmounts = remember { androidx.compose.runtime.mutableStateMapOf<String, NumberFieldState>() }
+    val pastOwes = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
+    fun pastField(label: String) = pastAmounts.getOrPut(label.trim()) { NumberFieldState("0", { mf.parse(it) }, grouped = true, unit = mf.unitName) }
+    fun pastSigned(): List<Long?> = rows.map { signedOpening(pastField(it.label), pastOwes[it.label.trim()] ?: true) }
     val unitsValid = rows.isNotEmpty() && rows.all { it.valid } && rows.map { it.label.trim() }.toSet().size == rows.size
     val areasKnown = rows.all { (Fmt.parseCubicMeters(it.area) ?: 0) > 0 }
     fun plan(): BuildingRepository.ChargePlan.Fixed = when (basis) {
@@ -245,6 +252,19 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
                 else -> ScreenList {
                     item { Hint(S.openingCashHint) }
                     item { NumberInput(S.openingCashSimple, cash) }
+                    item { com.github.opscalehub.dong.ui.SwitchRow(S.openingUnitsQuestion, pastBalances, { pastBalances = it }) }
+                    if (pastBalances) {
+                        item { Hint(S.openingUnitsHint) }
+                        items(rows.size) { i ->
+                            val label = rows[i].label.trim()
+                            SectionCard { OpeningUnitInput("${S.unit} $label", pastField(label), pastOwes[label] ?: true) { pastOwes[label] = it } }
+                        }
+                        item {
+                            val v = pastSigned().filterNotNull()
+                            Text(S.openingSummary.format(mf.withUnit(v.filter { it > 0 }.sum()), mf.withUnit(-v.filter { it < 0 }.sum())),
+                                style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
                 }
             }
         }
@@ -260,10 +280,10 @@ fun SetupWizard(vm: AppViewModel, onDone: () -> Unit, onCancel: (() -> Unit)? = 
                     vm.run(S.saved, onSuccess = onDone) {
                         val plan = if (fixed == true) plan() else BuildingRepository.ChargePlan.SplitBills
                         val id = vm.repos.buildings.setup(name, address, true, 1000, rows.map { it.toDraft() }, cash.value ?: 0, 0, plan,
-                            BuildingRepository.SharedBills(water, gas))
+                            BuildingRepository.SharedBills(water, gas), if (pastBalances) pastSigned().map { it!! } else emptyList())
                         vm.select(id)
                     }
-                }, enabled = cash.valid) { Text(S.finish) }
+                }, enabled = cash.valid && (!pastBalances || pastSigned().all { it != null })) { Text(S.finish) }
             }
         }
     }

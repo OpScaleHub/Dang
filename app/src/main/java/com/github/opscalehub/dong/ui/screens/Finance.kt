@@ -56,7 +56,8 @@ import com.github.opscalehub.dong.ui.rememberMoney
 
 private enum class Action { PAYMENT, REFUND, ADJUST, FUND_TRANSFER, CASH_TRANSFER, OPENING }
 
-private val reversible = setOf(EntryType.OPENING, EntryType.SUPPLIER_PAYMENT, EntryType.RESIDENT_PAYMENT, EntryType.REFUND, EntryType.ADJUSTMENT, EntryType.FUND_TRANSFER, EntryType.CASH_TRANSFER)
+// Opening balances are changed through their own form (only before the first month closes), not reversed here.
+private val reversible = setOf(EntryType.SUPPLIER_PAYMENT, EntryType.RESIDENT_PAYMENT, EntryType.REFUND, EntryType.ADJUSTMENT, EntryType.FUND_TRANSFER, EntryType.CASH_TRANSFER)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -70,7 +71,8 @@ fun FinanceScreen(vm: AppViewModel, nav: NavController) {
     var action by remember { mutableStateOf<Action?>(null) }
     var reversing by remember { mutableStateOf<JournalEntryEntity?>(null) }
     val reversed = entries.mapNotNull { it.reversesEntryId }.toSet()
-    val hasOpening = entries.any { it.type == EntryType.OPENING && it.id !in reversed }
+    val periods by vm.periods.collectAsState()
+    val openingEditable = periods.none { it.status == com.github.opscalehub.dong.data.db.PeriodStatus.FINALIZED }
     val digits = building.minorDigits
 
     ScreenList {
@@ -79,13 +81,14 @@ fun FinanceScreen(vm: AppViewModel, nav: NavController) {
                 // The everyday action first; rare ones (refunds, transfers, opening balances) folded away.
                 var more by remember { mutableStateOf(false) }
                 Button(onClick = { action = Action.PAYMENT }, Modifier.fillMaxWidth()) { Text(S.newPayment) }
+                // Until the first month closes, a new building may still need its past balances.
+                if (openingEditable) OutlinedButton(onClick = { action = Action.OPENING }, Modifier.fillMaxWidth()) { Text(S.opening) }
                 TextButton(onClick = { more = !more }) { Text(if (more) S.fewerActions else S.moreActions) }
                 if (more) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton(onClick = { action = Action.ADJUST }) { Text(S.adjustment) }
                     OutlinedButton(onClick = { action = Action.REFUND }) { Text(S.refund) }
                     OutlinedButton(onClick = { action = Action.FUND_TRANSFER }) { Text(S.fundTransfer) }
                     OutlinedButton(onClick = { action = Action.CASH_TRANSFER }) { Text(S.cashTransfer) }
-                    if (!hasOpening) OutlinedButton(onClick = { action = Action.OPENING }) { Text(S.opening) }
                 }
                 Hint(S.paymentNotIncome)
             }
@@ -129,7 +132,7 @@ fun FinanceScreen(vm: AppViewModel, nav: NavController) {
         Action.ADJUST -> AdjustDialog(vm, building.id, units, building.calendar, digits) { action = null }
         Action.FUND_TRANSFER -> TransferDialog(vm, building.id, building.calendar, digits, cash = false) { action = null }
         Action.CASH_TRANSFER -> TransferDialog(vm, building.id, building.calendar, digits, cash = true) { action = null }
-        Action.OPENING -> OpeningDialog(vm, building.id, units, building.calendar, digits) { action = null }
+        Action.OPENING -> OpeningDialog(vm, building.id, units) { action = null }
         null -> Unit
     }
     reversing?.let { e ->
@@ -231,25 +234,43 @@ private fun TransferDialog(vm: AppViewModel, b: String, cal: com.github.opscaleh
     }
 }
 
+/** A unit's balance from before the app: an amount plus «بدهکار است / پیش‌پرداخت داده» instead of a sign. */
 @Composable
-private fun OpeningDialog(vm: AppViewModel, b: String, units: List<UnitEntity>, cal: com.github.opscalehub.dong.domain.model.CalendarSystem, digits: Int, close: () -> Unit) {
+internal fun OpeningUnitInput(label: String, amount: NumberFieldState, owes: Boolean, onOwes: (Boolean) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        NumberInput(label, amount)
+        if ((amount.value ?: 0) != 0L) SingleChoice(listOf(true, false), owes, onOwes) { if (it) S.openingOwes else S.openingAhead }
+    }
+}
+
+/** Signed opening amount (positive = owes), or null when the field is not a non-negative number. */
+internal fun signedOpening(amount: NumberFieldState, owes: Boolean): Long? = amount.value?.takeIf { it >= 0 }?.let { if (owes) it else -it }
+
+/** Opening balances, pre-filled with what is recorded; editable only until the first month closes. */
+@Composable
+private fun OpeningDialog(vm: AppViewModel, b: String, units: List<UnitEntity>, close: () -> Unit) {
+    val current by derived(vm, b) { vm.repos.finance.opening(b) }
+    val cur = current ?: return
     val funds by vm.funds.collectAsState()
     val accounts by vm.cashAccounts.collectAsState()
-    val date = rememberDate(vm.today, cal)
-    val cash = accounts.associate { it.id to rememberMoney(0) }
-    val others = funds.filter { it.kind != FundKind.OPERATING }.associate { it.id to rememberMoney(0) }
-    val unitFields: Map<String, NumberFieldState> = units.associate { it.id to rememberMoney(0) }
-    val all = cash.values + others.values + unitFields.values
+    val advanced by vm.ui.advanced.collectAsState()
+    val cash = accounts.associate { it.id to rememberMoney(cur.cash[it.id] ?: 0) }
+    val others = funds.filter { it.kind != FundKind.OPERATING }.associate { it.id to rememberMoney(cur.funds[it.id] ?: 0) }
+    val unitFields = units.associate { it.id to rememberMoney(kotlin.math.abs(cur.units[it.id] ?: 0)) }
+    val owes = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>().apply { units.forEach { put(it.id, (cur.units[it.id] ?: 0) >= 0) } } }
+    val valid = (cash.values + others.values).all { it.valid } && unitFields.all { (id, f) -> signedOpening(f, owes[id] ?: true) != null }
     FormDialog(S.opening, close, {
         vm.run(S.saved, onSuccess = close) {
-            vm.repos.finance.postOpening(b, date.value!!, cash.mapValues { it.value.value!! }, unitFields.mapValues { it.value.value!! }, emptyMap(), others.mapValues { it.value.value!! })
+            vm.repos.finance.setOpening(b, cash.mapValues { it.value.value!! },
+                unitFields.mapValues { (id, f) -> signedOpening(f, owes[id] ?: true)!! }, others.mapValues { it.value.value!! })
         }
-    }, canConfirm = date.value != null && all.all { it.valid }) {
+    }, canConfirm = valid) {
         Hint(S.openingHint)
-        DateInput(S.date, date, vm.today)
         accounts.forEach { a -> NumberInput("${S.openingCash}: ${a.name}", cash.getValue(a.id)) }
-        funds.filter { it.kind != FundKind.OPERATING }.forEach { f -> NumberInput("${S.openingReserve}: ${f.name}", others.getValue(f.id)) }
+        // Reserve funds are an advanced idea; still shown when they already hold an opening amount.
+        funds.filter { it.kind != FundKind.OPERATING && (advanced || (cur.funds[it.id] ?: 0) != 0L) }
+            .forEach { f -> NumberInput("${S.openingReserve}: ${f.name}", others.getValue(f.id)) }
         Text(S.openingUnits, style = MaterialTheme.typography.labelLarge)
-        units.forEach { u -> NumberInput("${S.unit} ${u.label}", unitFields.getValue(u.id)) }
+        units.forEach { u -> OpeningUnitInput("${S.unit} ${u.label}", unitFields.getValue(u.id), owes[u.id] ?: true) { owes[u.id] = it } }
     }
 }

@@ -62,6 +62,7 @@ import com.github.opscalehub.dong.ui.Divider
 import com.github.opscalehub.dong.ui.Dropdown
 import com.github.opscalehub.dong.ui.FormDialog
 import com.github.opscalehub.dong.ui.Hint
+import com.github.opscalehub.dong.ui.rememberMoney
 import com.github.opscalehub.dong.ui.KeyValue
 import com.github.opscalehub.dong.ui.NumberInput
 import com.github.opscalehub.dong.ui.Routes
@@ -264,6 +265,8 @@ fun UnitScreen(vm: AppViewModel, nav: NavController, unitId: String) {
     val statement by derived(vm, unitId) { vm.repos.finance.unitStatement(building.id, unitId) }
     val lastClosed = periods.filter { it.status == PeriodStatus.FINALIZED }.maxByOrNull { it.endDate }
     var editing by remember { mutableStateOf(false) }
+    var settingOpening by remember { mutableStateOf(false) }
+    val openingEditable = periods.none { it.status == PeriodStatus.FINALIZED }
     var addingOcc by remember { mutableStateOf(false) }
     var paying by remember { mutableStateOf(false) }
     var showDetails by remember { mutableStateOf(false) }
@@ -302,6 +305,7 @@ fun UnitScreen(vm: AppViewModel, nav: NavController, unitId: String) {
                     }) { Text(S.shareBill) }
                     if (balance > 0) OutlinedButton(onClick = { BillShare.shareText(context, reminder()) }) { Text(S.shareReminder) }
                     TextButton(onClick = { editing = true }) { Text(S.edit) }
+                    if (openingEditable) TextButton(onClick = { settingOpening = true }) { Text(S.unitOpening) }
                 }
             }
         }
@@ -370,6 +374,7 @@ fun UnitScreen(vm: AppViewModel, nav: NavController, unitId: String) {
         }
     }
     if (editing) UnitDialog(vm, unit, building.id) { editing = false }
+    if (settingOpening) UnitOpeningDialog(vm, building.id, unit) { settingOpening = false }
     if (paying) PaymentDialog(vm, building.id, units, building.calendar, 0, preset = unit, close = { paying = false })
     if (addingOcc) {
         val date = rememberDate(vm.today, building.calendar)
@@ -451,3 +456,18 @@ fun ParkingScreen(vm: AppViewModel) {
     }
 }
 
+
+/** This unit's balance from before the app; only offered until the first month closes. */
+@Composable
+private fun UnitOpeningDialog(vm: AppViewModel, b: String, unit: UnitEntity, close: () -> Unit) {
+    val current by derived(vm, b, unit.id) { vm.repos.finance.opening(b).units[unit.id] ?: 0L }
+    val cur = current ?: return
+    val amount = rememberMoney(kotlin.math.abs(cur))
+    var owes by remember { mutableStateOf(cur >= 0) }
+    FormDialog("${S.unitOpening} — ${S.unit} ${unit.label}", close, {
+        vm.run(S.saved, onSuccess = close) { vm.repos.finance.setUnitOpening(b, unit.id, signedOpening(amount, owes)!!) }
+    }, canConfirm = signedOpening(amount, owes) != null) {
+        Hint(S.unitOpeningHint)
+        OpeningUnitInput(S.amount, amount, owes) { owes = it }
+    }
+}

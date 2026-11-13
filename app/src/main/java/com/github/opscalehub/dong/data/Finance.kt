@@ -235,6 +235,54 @@ class FinanceRepository(private val r: Repos) {
         r.journal.post(buildingId, EntryType.OPENING, date, postings, "مانده‌های افتتاحیه")
     }
 
+    /** The building's opening balances as they stand (one active entry, or none). Unit amounts: positive = owes. */
+    data class Opening(
+        val entryId: String?, val date: Long?,
+        val cash: Map<String, Long>, val units: Map<String, Long>, val suppliers: Map<String?, Long>, val funds: Map<String, Long>,
+    )
+
+    suspend fun opening(buildingId: String): Opening {
+        val e = fin.entries(buildingId).firstOrNull { it.type == EntryType.OPENING && fin.reversalCount(it.id) == 0 }
+            ?: return Opening(null, null, emptyMap(), emptyMap(), emptyMap(), emptyMap())
+        val lines = fin.linesOf(e.id)
+        fun <K> sum(a: AccountKind, sign: Long, key: (com.github.opscalehub.dong.data.db.JournalLineEntity) -> K) =
+            lines.filter { it.account == a }.groupBy(key).mapValues { (_, l) -> sign * l.sumOf { it.amountMinor } }
+        val op = operatingFundId(buildingId)
+        return Opening(e.id, e.entryDate, sum(AccountKind.CASH, 1) { it.cashAccountId!! }, sum(AccountKind.RECEIVABLE, 1) { it.unitId!! },
+            sum(AccountKind.PAYABLE, -1) { it.supplierId }, sum(AccountKind.FUND_EQUITY, -1) { it.fundId!! } - op)
+    }
+
+    /**
+     * Opening balances describe the building before it started using the app, so they can be set
+     * and changed only until the first month is closed. After that, history stays as it is and a
+     * unit's balance is corrected with [adjust] (dated today, with a reason).
+     */
+    suspend fun openingEditable(buildingId: String): Boolean = r.lastFinalizedEnd(buildingId) == null
+
+    /**
+     * Sets the opening balances, replacing any earlier ones: the old entry is reversed on its own
+     * date and a new one posted, so the journal keeps both. Always dated the day before the first
+     * month. Returns the new entry, or null when everything is zero.
+     */
+    suspend fun setOpening(buildingId: String, cash: Map<String, Long>, units: Map<String, Long>, otherFunds: Map<String, Long>): String? = r.tx {
+        if (!openingEditable(buildingId)) fail(OpError.OPENING_LOCKED)
+        val cur = opening(buildingId)
+        fun <K> clean(m: Map<K, Long>) = m.filterValues { it != 0L }
+        if (cur.entryId != null && clean(cur.cash) == clean(cash) && clean(cur.units) == clean(units) && clean(cur.funds) == clean(otherFunds)) return@tx cur.entryId
+        val first = r.db.periodDao().periods(buildingId).minOfOrNull { it.startDate } ?: SampleData.month(r.clock.today()).start
+        val date = first - 1
+        if (cur.entryId != null) r.journal.post(buildingId, EntryType.REVERSAL, cur.date!!, PostingRules.reversal(fin.linesOf(cur.entryId).map { it.toPosting() }),
+            "اصلاح مانده‌های اول کار", reversesEntryId = cur.entryId)
+        if (clean(cash).isEmpty() && clean(units).isEmpty() && clean(otherFunds).isEmpty() && clean(cur.suppliers).isEmpty()) null
+        else postOpening(buildingId, date, cash, units, cur.suppliers, otherFunds)
+    }
+
+    /** Changes one unit's balance from before the app ([amount] > 0 owes, < 0 paid ahead), keeping the rest. */
+    suspend fun setUnitOpening(buildingId: String, unitId: String, amount: Long): String? = r.tx {
+        val cur = opening(buildingId)
+        setOpening(buildingId, cur.cash, cur.units + (unitId to amount), cur.funds)
+    }
+
     suspend fun receivePayment(buildingId: String, unitId: String, amount: Long, cashAccountId: String, date: Long, reference: String = "", memo: String = "دریافت از واحد", method: String = ""): String = r.tx {
         r.journal.post(buildingId, EntryType.RESIDENT_PAYMENT, date, ledger { PostingRules.residentPayment(amount, unitId, cashAccountId) }, memo, reference, unitId = unitId, method = method)
     }
@@ -271,6 +319,7 @@ class FinanceRepository(private val r: Repos) {
         if (reason.isBlank()) fail(OpError.REASON_REQUIRED)
         val e = fin.entry(entryId) ?: fail(OpError.NOT_FOUND)
         if (e.type !in reversible) fail(OpError.CANNOT_REVERSE)
+        if (e.type == EntryType.OPENING && !openingEditable(e.buildingId)) fail(OpError.OPENING_LOCKED)
         if (fin.reversalCount(entryId) > 0) fail(OpError.ALREADY_REVERSED)
         r.journal.post(e.buildingId, EntryType.REVERSAL, r.clock.today(), PostingRules.reversal(fin.linesOf(entryId).map { it.toPosting() }),
             "برگشت: $reason", e.reference, e.periodId, e.expenseId, e.unitId, e.supplierId, entryId)
